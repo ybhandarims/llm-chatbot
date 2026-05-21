@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chatapp.fullname" . }}-config
+  namespace: {{ .Values.namespace }}
+data:
+  SETTINGS_URL: http://settings:8001
+  CONVERSATIONS_URL: http://conversations:8002
+  MESSAGES_URL: http://messages:8003
+  AI_URL: http://ai:8004
+  OPENAI_MODEL: {{ .Values.openai.model | quote }}
+  OPENAI_MOCK: {{ .Values.openai.mock | quote }}
+  SYSTEM_PROMPT: {{ .Values.openai.systemPrompt | quote }}

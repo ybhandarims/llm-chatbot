@@ -1,0 +1,12 @@
+{
+  "name": "monolithic-chat-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npx http-server public -p 3000",
+    "lint": "echo \"No frontend linter configured yet\""
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

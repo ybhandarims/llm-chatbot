@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messages
+  namespace: {{ .Values.namespace }}
+  labels:
+{{ include "chatapp.labels" . | indent 4 }}
+    app.kubernetes.io/component: messages
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: messages
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: messages
+{{ include "chatapp.labels" . | indent 8 }}
+    spec:
+      containers:
+        - name: messages
+          image: {{ .Values.images.messages.repository }}:{{ .Values.images.messages.tag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8003
+          env:
+            - name: MESSAGES_DB
+              value: /data/messages.db
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+{{ toYaml .Values.resources.backend | indent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: messages-data

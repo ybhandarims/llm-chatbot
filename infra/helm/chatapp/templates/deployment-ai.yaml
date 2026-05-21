@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai
+  namespace: {{ .Values.namespace }}
+  labels:
+{{ include "chatapp.labels" . | indent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: ai
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: ai
+{{ include "chatapp.labels" . | indent 8 }}
+    spec:
+      containers:
+        - name: ai
+          image: {{ .Values.images.ai.repository }}:{{ .Values.images.ai.tag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef:
+                name: {{ include "chatapp.fullname" . }}-config
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chatapp.fullname" . }}-openai
+                  key: OPENAI_API_KEY
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+{{ toYaml .Values.resources.ai | indent 12 }}

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settings
+  namespace: {{ .Values.namespace }}
+  labels:
+{{ include "chatapp.labels" . | indent 4 }}
+    app.kubernetes.io/component: settings
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: settings
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: settings
+{{ include "chatapp.labels" . | indent 8 }}
+    spec:
+      containers:
+        - name: settings
+          image: {{ .Values.images.settings.repository }}:{{ .Values.images.settings.tag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+{{ toYaml .Values.resources.backend | indent 12 }}

@@ -1,0 +1,73 @@
+namespace: chatapp
+
+imagePullPolicy: IfNotPresent
+
+images:
+  frontend:
+    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/frontend
+    tag: V1.0.0
+  gateway:
+    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/gateway
+    tag: V1.0.0
+  settings:
+    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/settings-service
+    tag: V1.0.0
+  conversations:
+    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/conversations-service
+    tag: V1.0.0
+  messages:
+    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/messages-service
+    tag: V1.0.0
+  ai:
+    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/ai-service
+    tag: V1.0.0
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: alb
+  host: chat.example.com
+  scheme: internet-facing
+  certificateArn: ""
+
+resources:
+  frontend:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  gateway:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  backend:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  ai:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+openai:
+  apiKey: ""
+  model: gpt-4.1-mini
+  mock: "false"
+  systemPrompt: "You are a concise and helpful assistant."
+
+storage:
+  className: gp2
+  size: 1Gi

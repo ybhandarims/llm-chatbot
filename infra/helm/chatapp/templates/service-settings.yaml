@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: settings
+  namespace: {{ .Values.namespace }}
+  labels:
+{{ include "chatapp.labels" . | indent 4 }}
+    app.kubernetes.io/component: settings
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/component: settings
+  ports:
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: http

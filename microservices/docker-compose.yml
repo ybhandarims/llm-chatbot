@@ -1,0 +1,47 @@
+version: '3.8'
+services:
+  settings:
+    build: ./settings-service
+    ports:
+      - "8001:8001"
+  conversations:
+    build: ./conversations-service
+    ports:
+      - "8002:8002"
+    environment:
+      - CONVERSATIONS_DB=/data/conversations.db
+    volumes:
+      - conversations_data:/data
+  messages:
+    build: ./messages-service
+    ports:
+      - "8003:8003"
+    environment:
+      - MESSAGES_DB=/data/messages.db
+    volumes:
+      - messages_data:/data
+  ai:
+    build: ./ai-service
+    ports:
+      - "8004:8004"
+    env_file:
+      - ./.env
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - settings
+      - conversations
+      - messages
+      - ai
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+
+volumes:
+  conversations_data:
+  messages_data:
