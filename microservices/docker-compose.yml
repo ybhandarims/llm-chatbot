@@ -1,47 +1,155 @@
 version: '3.8'
+
 services:
+  # API Services
   settings:
     build: ./settings-service
     ports:
       - "8001:8001"
+    environment:
+      - SERVICE_NAME=settings
+      - LOG_LEVEL=INFO
+      - DYNAMODB_TABLE=settings
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-localstack}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-localstack}
+    depends_on:
+      - localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
   conversations:
     build: ./conversations-service
     ports:
       - "8002:8002"
     environment:
-      - CONVERSATIONS_DB=/data/conversations.db
-    volumes:
-      - conversations_data:/data
+      - SERVICE_NAME=conversations
+      - LOG_LEVEL=INFO
+      - DYNAMODB_TABLE=conversations
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-localstack}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-localstack}
+    depends_on:
+      - localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
   messages:
     build: ./messages-service
     ports:
       - "8003:8003"
     environment:
-      - MESSAGES_DB=/data/messages.db
-    volumes:
-      - messages_data:/data
-  ai:
-    build: ./ai-service
-    ports:
-      - "8004:8004"
-    env_file:
-      - ./.env
+      - SERVICE_NAME=messages
+      - LOG_LEVEL=INFO
+      - DYNAMODB_TABLE=messages
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-localstack}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-localstack}
+    depends_on:
+      - localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
+  # Gateway with SQS integration
   gateway:
     build: ./gateway
     ports:
       - "8080:8080"
+    environment:
+      - SERVICE_NAME=gateway
+      - LOG_LEVEL=INFO
+      - SETTINGS_URL=http://settings:8001
+      - CONVERSATIONS_URL=http://conversations:8002
+      - MESSAGES_URL=http://messages:8003
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/ai-jobs
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-localstack}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-localstack}
     depends_on:
       - settings
       - conversations
       - messages
-      - ai
+      - localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
+  # AI Worker (processes async jobs from SQS)
+  ai-worker:
+    build: ./ai-service
+    environment:
+      - SERVICE_NAME=ai-worker
+      - LOG_LEVEL=INFO
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/ai-jobs
+      - DLQ_URL=http://localstack:4566/000000000000/ai-jobs-dlq
+      - MESSAGES_SERVICE_URL=http://messages:8003
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-localstack}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-localstack}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-test}
+    depends_on:
+      - localstack
+      - messages
+    scale: 1
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Frontend (Nginx serving static build)
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_WS_URL=ws://localhost:8080
     depends_on:
       - gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
 
-volumes:
-  conversations_data:
-  messages_data:
+  # LocalStack (for local SQS/DynamoDB)
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,sqs
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./localstack-init.sh:/docker-entrypoint-initaws.d/init-aws.sh"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

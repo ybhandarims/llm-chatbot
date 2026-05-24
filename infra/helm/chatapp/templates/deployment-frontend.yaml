@@ -8,6 +8,11 @@ metadata:
     app.kubernetes.io/component: frontend
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/component: frontend
@@ -16,24 +21,90 @@ spec:
       labels:
         app.kubernetes.io/component: frontend
 {{ include "chatapp.labels" . | indent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsReadOnlyRootFilesystem: false
+        seccompProfile:
+          type: RuntimeDefault
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - frontend
+                topologyKey: kubernetes.io/hostname
+      
+      nodeSelector:
+        workload: api
+      
       containers:
         - name: frontend
           image: {{ .Values.images.frontend.repository }}:{{ .Values.images.frontend.tag }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          
           ports:
-            - containerPort: 3000
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+          
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          
           readinessProbe:
             httpGet:
               path: /
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 10
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          
           livenessProbe:
             httpGet:
               path: /
-              port: 3000
-            initialDelaySeconds: 10
-            periodSeconds: 20
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          
           resources:
 {{ toYaml .Values.resources.frontend | indent 12 }}
+          
+          volumeMounts:
+            - name: cache
+              mountPath: /usr/share/nginx/cache
+      
+      volumes:
+        - name: cache
+          emptyDir: {}
+      
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+

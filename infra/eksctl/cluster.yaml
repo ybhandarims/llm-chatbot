@@ -2,32 +2,171 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: chatapp-eks
+  name: llm-chatbot
   region: us-east-1
   version: "1.29"
+  tags:
+    Environment: production
+    Architecture: budget-conscious
+    ManagedBy: eksctl
 
+# Enable IRSA and OIDC for Pod Identity
 iam:
   withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess
+    - metadata:
+        name: ebs-csi-driver-sa
+        namespace: kube-system
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+    - metadata:
+        name: chatbot-workload
+        namespace: chatbot
+      attachPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+            Resource: arn:aws:dynamodb:us-east-1:*:table/conversations
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+            Resource: arn:aws:dynamodb:us-east-1:*:table/messages
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: arn:aws:dynamodb:us-east-1:*:table/settings
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource:
+              - arn:aws:sqs:us-east-1:*:ai-jobs.fifo
+              - arn:aws:sqs:us-east-1:*:ai-jobs-dlq.fifo
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:us-east-1:*:*
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: arn:aws:secretsmanager:us-east-1:*:secret:llm-chatbot/*
 
+# VPC Configuration with Multi-AZ
 vpc:
+  id: null  # Let eksctl create VPC
+  cidr: "10.0.0.0/16"
+  nat:
+    gateway: HighlyAvailable  # One NAT per AZ for HA
   clusterEndpoints:
     publicAccess: true
     privateAccess: true
+  publicAccess:
+    cidrs:
+      - 0.0.0.0/0
 
+# Multiple Node Groups for workload separation (Budget-Conscious)
 managedNodeGroups:
-  - name: ng-app
+  # System node pool for Kubernetes system components
+  - name: system-pool
     instanceType: t3.medium
-    desiredCapacity: 2
-    minSize: 2
-    maxSize: 4
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 3
     volumeSize: 30
+    volumeType: gp3
     ssh:
       allow: false
     labels:
-      role: app
+      workload: system
+    taints:
+      - key: system
+        value: "true"
+        effect: NoSchedule
+    tags:
+      Purpose: system
 
+  # API node pool for CRUD services
+  - name: api-pool
+    instanceType: t3.medium
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 5
+    volumeSize: 30
+    volumeType: gp3
+    ssh:
+      allow: false
+    labels:
+      workload: api
+    tags:
+      Purpose: api-services
+    # Use spot instances for cost optimization (can tolerate interruptions)
+    spot: false  # Set to true for spot instances to reduce 50-70% cost
+
+  # AI Worker pool for inference (separate from API servers)
+  - name: ai-worker-pool
+    instanceType: t3.medium
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 5
+    volumeSize: 30
+    volumeType: gp3
+    ssh:
+      allow: false
+    labels:
+      workload: ai-worker
+    tags:
+      Purpose: ai-workers
+    # Can use spot instances here safely
+    spot: false
+
+# Addon configurations for budget-conscious setup
 addons:
   - name: vpc-cni
+    version: latest
+    attachPolicyARNs:
+      - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+
   - name: kube-proxy
+    version: latest
+
   - name: coredns
+    version: latest
+
   - name: aws-ebs-csi-driver
+    version: latest
+    attachPolicyARNs:
+      - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+
+# Enable logging for observability
+cloudWatch:
+  clusterLogging:
+    enableTypes:
+      - api
+      - audit
+      - authenticator
+      - controllerManager
+      - scheduler
+    logRetentionInDays: 7  # Keep 7 days to reduce cost

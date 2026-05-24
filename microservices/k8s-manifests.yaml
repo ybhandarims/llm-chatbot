@@ -1,0 +1,691 @@
+"""
+Kubernetes Deployment Manifests for Budget-Conscious Architecture
+
+This file contains the resource definitions for deploying the LLM Chatbot
+microservices to an EKS cluster following the budget-conscious architecture.
+
+Features:
+- Multi-AZ deployment
+- Horizontal Pod Autoscaling (HPA)
+- Pod Disruption Budgets (PDB)
+- Resource requests/limits
+- Health checks (readiness, liveness, startup probes)
+- Structured logging
+- Network policies
+"""
+
+# Deploy using: kubectl apply -f k8s-manifests.yaml
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chatbot
+  labels:
+    app: llm-chatbot
+
+---
+# ConfigMap for environment variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chatbot-config
+  namespace: chatbot
+data:
+  SETTINGS_URL: "http://settings:8001"
+  CONVERSATIONS_URL: "http://conversations:8002"
+  MESSAGES_URL: "http://messages:8003"
+  AWS_REGION: "us-east-1"
+  LOG_LEVEL: "INFO"
+  OPENAI_MODEL: "gpt-3.5-turbo"
+  SYSTEM_PROMPT: "You are a helpful assistant."
+
+---
+# Secret for sensitive data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chatbot-secrets
+  namespace: chatbot
+type: Opaque
+stringData:
+  OPENAI_API_KEY: "sk-your-key-here"
+  AWS_ACCESS_KEY_ID: "your-key"
+  AWS_SECRET_ACCESS_KEY: "your-secret"
+
+---
+# Settings Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settings
+  namespace: chatbot
+  labels:
+    app: settings
+    service: chatbot
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: settings
+  template:
+    metadata:
+      labels:
+        app: settings
+        service: chatbot
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - settings
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: settings
+        image: llm-chatbot/settings-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8001
+        envFrom:
+        - configMapRef:
+            name: chatbot-config
+        - secretRef:
+            name: chatbot-secrets
+        env:
+        - name: DYNAMODB_TABLE
+          value: "settings"
+        - name: SERVICE_NAME
+          value: "settings"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+
+---
+# Settings Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: settings
+  namespace: chatbot
+spec:
+  selector:
+    app: settings
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP
+
+---
+# Conversations Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conversations
+  namespace: chatbot
+  labels:
+    app: conversations
+    service: chatbot
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: conversations
+  template:
+    metadata:
+      labels:
+        app: conversations
+        service: chatbot
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - conversations
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: conversations
+        image: llm-chatbot/conversations-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8002
+        envFrom:
+        - configMapRef:
+            name: chatbot-config
+        - secretRef:
+            name: chatbot-secrets
+        env:
+        - name: DYNAMODB_TABLE
+          value: "conversations"
+        - name: SERVICE_NAME
+          value: "conversations"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Conversations Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: conversations
+  namespace: chatbot
+spec:
+  selector:
+    app: conversations
+  ports:
+  - name: http
+    port: 8002
+    targetPort: 8002
+  type: ClusterIP
+
+---
+# Messages Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messages
+  namespace: chatbot
+  labels:
+    app: messages
+    service: chatbot
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: messages
+  template:
+    metadata:
+      labels:
+        app: messages
+        service: chatbot
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - messages
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: messages
+        image: llm-chatbot/messages-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8003
+        envFrom:
+        - configMapRef:
+            name: chatbot-config
+        - secretRef:
+            name: chatbot-secrets
+        env:
+        - name: DYNAMODB_TABLE
+          value: "messages"
+        - name: SERVICE_NAME
+          value: "messages"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Messages Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: messages
+  namespace: chatbot
+spec:
+  selector:
+    app: messages
+  ports:
+  - name: http
+    port: 8003
+    targetPort: 8003
+  type: ClusterIP
+
+---
+# Gateway Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: chatbot
+  labels:
+    app: gateway
+    service: chatbot
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+        service: chatbot
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - gateway
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: gateway
+        image: llm-chatbot/gateway:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: chatbot-config
+        - secretRef:
+            name: chatbot-secrets
+        env:
+        - name: SERVICE_NAME
+          value: "gateway"
+        - name: SQS_QUEUE_URL
+          value: "https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/ai-jobs"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Gateway Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: chatbot
+spec:
+  selector:
+    app: gateway
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: LoadBalancer
+
+---
+# AI Worker Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker
+  namespace: chatbot
+  labels:
+    app: ai-worker
+    service: chatbot
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-worker
+  template:
+    metadata:
+      labels:
+        app: ai-worker
+        service: chatbot
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ai-worker
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: ai-worker
+        image: llm-chatbot/ai-service:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: chatbot-config
+        - secretRef:
+            name: chatbot-secrets
+        env:
+        - name: SERVICE_NAME
+          value: "ai-worker"
+        - name: SQS_QUEUE_URL
+          value: "https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/ai-jobs"
+        - name: DLQ_URL
+          value: "https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/ai-jobs-dlq"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+
+---
+# AI Worker HPA (scales based on SQS queue depth)
+apiVersion: autoscaling.keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-worker-scaler
+  namespace: chatbot
+spec:
+  scaleTargetRef:
+    name: ai-worker
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  triggers:
+  - type: aws-sqs-queue
+    metadata:
+      queueURL: https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/ai-jobs
+      awsRegion: "us-east-1"
+      queueLength: "5"
+
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: chatbot
+  labels:
+    app: frontend
+    service: chatbot
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        service: chatbot
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - frontend
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: frontend
+        image: llm-chatbot/frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+        - name: REACT_APP_API_URL
+          value: "https://api.example.com"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: chatbot
+spec:
+  selector:
+    app: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+  type: LoadBalancer
+
+---
+# Pod Disruption Budget for API Services
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-services-pdb
+  namespace: chatbot
+spec:
+  minAvailable: 2
+  selector:
+    matchExpressions:
+    - key: app
+      operator: In
+      values:
+      - settings
+      - conversations
+      - messages
+      - gateway
+
+---
+# Horizontal Pod Autoscaler for Gateway
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-hpa
+  namespace: chatbot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+
+---
+# NetworkPolicy for secure communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chatbot-network-policy
+  namespace: chatbot
+spec:
+  podSelector:
+    matchLabels:
+      service: chatbot
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          service: chatbot
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          service: chatbot
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

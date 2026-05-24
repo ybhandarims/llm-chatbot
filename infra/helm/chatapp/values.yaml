@@ -1,73 +1,239 @@
-namespace: chatapp
+namespace: chatbot
 
 imagePullPolicy: IfNotPresent
 
+# ECR Image registries (Update with your AWS account ID and region)
 images:
   frontend:
-    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/frontend
-    tag: V1.0.0
+    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/frontend"
+    tag: "latest"
   gateway:
-    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/gateway
-    tag: V1.0.0
+    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/gateway"
+    tag: "latest"
   settings:
-    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/settings-service
-    tag: V1.0.0
+    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/settings"
+    tag: "latest"
   conversations:
-    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/conversations-service
-    tag: V1.0.0
+    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/conversations"
+    tag: "latest"
   messages:
-    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/messages-service
-    tag: V1.0.0
+    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/messages"
+    tag: "latest"
   ai:
-    repository: 537053564195.dkr.ecr.ap-south-1.amazonaws.com/ott-npe/ai-service
-    tag: V1.0.0
+    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/ai-worker"
+    tag: "latest"
 
+# Service configuration
 service:
   type: ClusterIP
 
+# Ingress configuration with ALB
 ingress:
   enabled: true
   className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    # Uncomment for HTTPS
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/..."
   host: chat.example.com
   scheme: internet-facing
   certificateArn: ""
 
+# IRSA (IAM Roles for Service Accounts)
+irsa:
+  enabled: true
+  roleArn: "arn:aws:iam::ACCOUNT_ID:role/llm-chatbot-workload"
+  serviceAccount: chatbot-workload
+
+# Resource requirements for budget-conscious setup
 resources:
   frontend:
     requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 200m
+      cpu: 100m
       memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   gateway:
     requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
       cpu: 250m
-      memory: 256Mi
-  backend:
-    requests:
-      cpu: 50m
-      memory: 64Mi
+      memory: 512Mi
     limits:
-      cpu: 200m
+      cpu: 1000m
+      memory: 1Gi
+  settings:
+    requests:
+      cpu: 100m
       memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  conversations:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  messages:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   ai:
     requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 300m
+      cpu: 250m
       memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
 
+# Horizontal Pod Autoscaler configuration
+autoscaling:
+  enabled: true
+  frontend:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  gateway:
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  settings:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+  conversations:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+  messages:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+  ai:
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+
+# Pod Disruption Budget configuration
+podDisruptionBudget:
+  enabled: true
+  frontend:
+    minAvailable: 1
+  gateway:
+    minAvailable: 2
+  settings:
+    minAvailable: 1
+  conversations:
+    minAvailable: 1
+  messages:
+    minAvailable: 1
+  ai:
+    minAvailable: 0
+
+# Workload node assignment (node selector)
+nodeSelector:
+  system: "false"
+
+# Workload affinity rules
+affinity:
+  podAntiAffinity: preferred  # prefer spread across nodes, hard for critical services
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsReadOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# OpenAI configuration
 openai:
   apiKey: ""
-  model: gpt-4.1-mini
+  model: "gpt-3.5-turbo"
   mock: "false"
-  systemPrompt: "You are a concise and helpful assistant."
+  systemPrompt: "You are a helpful and concise assistant."
 
+# AWS configuration
+aws:
+  region: "us-east-1"
+  dynamodbEndpoint: ""  # Leave empty for AWS, set for local DynamoDB
+  sqsEndpoint: ""       # Leave empty for AWS, set for LocalStack
+
+# DynamoDB configuration
+dynamodb:
+  conversationsTable: "conversations"
+  messagesTable: "messages"
+  settingsTable: "settings"
+  billingMode: "PAY_PER_REQUEST"  # Budget-conscious option
+  ttl:
+    enabled: true
+    attributeName: "expiresAt"
+    days: 90  # Delete conversations after 90 days
+
+# SQS configuration
+sqs:
+  aiJobsQueue: "ai-jobs.fifo"
+  aiJobsDlq: "ai-jobs-dlq.fifo"
+  visibilityTimeout: 300
+  maxReceiveCount: 3
+
+# Storage configuration
 storage:
-  className: gp2
+  className: gp3
   size: 1Gi
+
+# Observability configuration
+observability:
+  enabled: true
+  logging:
+    level: "INFO"
+    format: "json"  # Structured logging
+    cloudwatchLogGroup: "/aws/eks/llm-chatbot"
+    retention: 7  # Days
+  metrics:
+    enabled: true
+    port: 9090
+  tracing:
+    enabled: false  # Can enable with Jaeger/Tempo
+    samplingRate: 0.1
+
+# Probes configuration
+probes:
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+  startup:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+
+# Network policies
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Priority class for critical services
+priorityClass:
+  enabled: true
+  critical: "system-cluster-critical"
+  normal: "default"

@@ -1,48 +1,77 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai
+  name: ai-worker
   namespace: {{ .Values.namespace }}
   labels:
 {{ include "chatapp.labels" . | indent 4 }}
-    app.kubernetes.io/component: ai
+    app.kubernetes.io/component: ai-worker
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
-      app.kubernetes.io/component: ai
+      app.kubernetes.io/component: ai-worker
   template:
     metadata:
       labels:
-        app.kubernetes.io/component: ai
+        app.kubernetes.io/component: ai-worker
 {{ include "chatapp.labels" . | indent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
     spec:
+      serviceAccountName: chatbot-workload
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - ai-worker
+                topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        workload: ai-worker
       containers:
-        - name: ai
+        - name: ai-worker
           image: {{ .Values.images.ai.repository }}:{{ .Values.images.ai.tag }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          ports:
-            - containerPort: 8004
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: AWS_REGION
+              value: "{{ .Values.aws.region }}"
+            - name: SQS_QUEUE_URL
+              value: "{{ .Values.sqs.aiJobsQueue }}"
+            - name: SQS_DLQ_URL
+              value: "{{ .Values.sqs.aiJobsDlq }}"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: LOG_FORMAT
+              value: "json"
+            - name: OPENAI_MOCK
+              value: "{{ .Values.openai.mock }}"
           envFrom:
             - configMapRef:
                 name: {{ include "chatapp.fullname" . }}-config
-          env:
-            - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "chatapp.fullname" . }}-openai
-                  key: OPENAI_API_KEY
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8004
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8004
-            initialDelaySeconds: 10
-            periodSeconds: 20
+            - secretRef:
+                name: {{ include "chatapp.fullname" . }}-secret
           resources:
 {{ toYaml .Values.resources.ai | indent 12 }}
+          # Note: AI worker is background job, may not need HTTP probes
+          # Can add custom probes for queue monitoring if needed
+      terminationGracePeriodSeconds: 60

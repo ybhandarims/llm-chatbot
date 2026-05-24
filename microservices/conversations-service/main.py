@@ -1,108 +1,222 @@
-from fastapi import FastAPI
-from typing import List
-
-app = FastAPI()
+"""
+Conversations Service - Manages conversation data in DynamoDB
+Uses async architecture with proper error handling and logging
+"""
 
 from fastapi import FastAPI, HTTPException
-import sqlite3
+from pydantic import BaseModel
+from typing import List, Optional
 import os
 import json
+import logging
+import uuid
 from datetime import datetime
+import boto3
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# FastAPI app
 app = FastAPI()
 
-DB_PATH = os.getenv("CONVERSATIONS_DB", "./conversations.db")
+# Configuration
+DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "conversations")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+# DynamoDB client
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+table = dynamodb.Table(DYNAMODB_TABLE)
 
 
-def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Pydantic models
+class Message(BaseModel):
+    role: str
+    content: str
 
 
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS conversations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            messages TEXT
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
+class ConversationCreate(BaseModel):
+    title: Optional[str] = None
 
 
-@app.on_event("startup")
-def startup():
-    init_db()
+class ConversationResponse(BaseModel):
+    id: str
+    title: str
+    messages: List[dict] = []
+    created_at: str
+    updated_at: str
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Health check endpoint"""
+    return {"status": "ok", "service": "conversations"}
+
+
+@app.post("/conversations")
+def create_conversation(payload: ConversationCreate):
+    """Create a new conversation"""
+    try:
+        conversation_id = str(uuid.uuid4())
+        user_id = "default_user"  # In production, extract from JWT
+        timestamp = datetime.utcnow().isoformat()
+        
+        item = {
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "title": payload.title or f"Conversation-{timestamp[:10]}",
+            "messages": [],
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+        
+        table.put_item(Item=item)
+        logger.info(f"Conversation created: {conversation_id}")
+        
+        return {
+            "id": conversation_id,
+            "title": item["title"],
+            "messages": [],
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+    except Exception as e:
+        logger.error(f"Error creating conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/conversations")
 def list_conversations():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, title, messages FROM conversations ORDER BY id DESC")
-    rows = cur.fetchall()
-    out = []
-    for r in rows:
-        msgs = json.loads(r["messages"]) if r["messages"] else []
-        preview = msgs[-1]["content"] if msgs else None
-        out.append({"id": r["id"], "title": r["title"], "last_message_preview": preview})
-    conn.close()
-    return out
+    """List all conversations for user"""
+    try:
+        user_id = "default_user"  # In production, extract from JWT
+        
+        response = table.query(
+            KeyConditionExpression="user_id = :uid",
+            ExpressionAttributeValues={":uid": user_id}
+        )
+        
+        conversations = []
+        for item in response.get("Items", []):
+            messages = item.get("messages", [])
+            last_message = messages[-1]["content"] if messages else None
+            
+            conversations.append({
+                "id": item["conversation_id"],
+                "title": item.get("title", "Untitled"),
+                "last_message_preview": last_message,
+                "created_at": item.get("created_at"),
+                "message_count": len(messages),
+            })
+        
+        return conversations
+    except Exception as e:
+        logger.error(f"Error listing conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/conversations")
-def create_conversation(payload: dict):
-    title = payload.get("title") or f"conv-{int(datetime.utcnow().timestamp())}"
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO conversations (title, messages) VALUES (?, ?)", (title, json.dumps([])))
-    conn.commit()
-    cid = cur.lastrowid
-    conn.close()
-    return {"id": cid, "title": title, "messages": []}
+@app.get("/conversations/{conversation_id}")
+def get_conversation(conversation_id: str):
+    """Get specific conversation with all messages"""
+    try:
+        user_id = "default_user"  # In production, extract from JWT
+        
+        response = table.get_item(
+            Key={
+                "user_id": user_id,
+                "conversation_id": conversation_id
+            }
+        )
+        
+        if "Item" not in response:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        item = response["Item"]
+        return {
+            "id": conversation_id,
+            "title": item.get("title", "Untitled"),
+            "messages": item.get("messages", []),
+            "created_at": item.get("created_at"),
+            "updated_at": item.get("updated_at"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/conversations/{conv_id}")
-def get_conversation(conv_id: int):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, title, messages FROM conversations WHERE id = ?", (conv_id,))
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        raise HTTPException(status_code=404, detail="conversation not found")
-    msgs = json.loads(row["messages"]) if row["messages"] else []
-    return {"id": row["id"], "title": row["title"], "messages": msgs}
+@app.post("/conversations/{conversation_id}/messages")
+def append_message(conversation_id: str, payload: Message):
+    """Append a message to a conversation"""
+    try:
+        user_id = "default_user"  # In production, extract from JWT
+        timestamp = datetime.utcnow().isoformat()
+        
+        # Get current conversation
+        response = table.get_item(
+            Key={
+                "user_id": user_id,
+                "conversation_id": conversation_id
+            }
+        )
+        
+        if "Item" not in response:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        item = response["Item"]
+        messages = item.get("messages", [])
+        
+        # Add new message
+        new_message = {
+            "role": payload.role,
+            "content": payload.content,
+            "timestamp": timestamp,
+        }
+        messages.append(new_message)
+        
+        # Update conversation
+        table.update_item(
+            Key={
+                "user_id": user_id,
+                "conversation_id": conversation_id
+            },
+            UpdateExpression="SET messages = :msgs, updated_at = :updated",
+            ExpressionAttributeValues={
+                ":msgs": messages,
+                ":updated": timestamp
+            }
+        )
+        
+        logger.info(f"Message added to conversation {conversation_id}")
+        
+        return {
+            "id": conversation_id,
+            "messages": messages,
+            "updated_at": timestamp,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error appending message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/conversations/{conv_id}/messages")
-def append_message(conv_id: int, payload: dict):
-    role = payload.get("role", "user")
-    content = payload.get("content")
-    if content is None:
-        raise HTTPException(status_code=400, detail="content is required")
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT messages FROM conversations WHERE id = ?", (conv_id,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail="conversation not found")
-    msgs = json.loads(row["messages"]) if row["messages"] else []
-    msg = {"role": role, "content": content, "ts": datetime.utcnow().isoformat()}
-    msgs.append(msg)
-    cur.execute("UPDATE conversations SET messages = ? WHERE id = ?", (json.dumps(msgs), conv_id))
-    conn.commit()
-    conn.close()
-    return {"status": "ok", "message": msg}
+@app.delete("/conversations/{conversation_id}")
+def delete_conversation(conversation_id: str):
+    """Delete a conversation"""
+    try:
+        user_id = "default_user"  # In production, extract from JWT
+        
+        table.delete_item(
+            Key={
+                "user_id": user_id,
+                "conversation_id": conversation_id
+            }
+        )
+        
+        logger.info(f"Conversation deleted: {conversation_id}")
+        return {"status": "deleted", "conversation_id": conversation_id}
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

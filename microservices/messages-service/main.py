@@ -1,74 +1,206 @@
-from fastapi import FastAPI, HTTPException
-import sqlite3
-import os
-from datetime import datetime
+"""
+Messages Service - Manages individual messages in DynamoDB
+Uses async architecture with proper error handling and logging
+"""
 
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import os
+import json
+import logging
+import uuid
+from datetime import datetime
+import boto3
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# FastAPI app
 app = FastAPI()
 
-DB_PATH = os.getenv("MESSAGES_DB", "./messages.db")
+# Configuration
+DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "messages")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+# DynamoDB client
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+table = dynamodb.Table(DYNAMODB_TABLE)
 
 
-def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Pydantic models
+class MessageCreate(BaseModel):
+    conversation_id: str
+    role: str
+    message: str
 
 
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            conversation_id INTEGER,
-            role TEXT,
-            content TEXT,
-            created_at TEXT
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
-
-
-@app.on_event("startup")
-def startup():
-    init_db()
+class MessageResponse(BaseModel):
+    id: str
+    conversation_id: str
+    role: str
+    message: str
+    timestamp: str
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Health check endpoint"""
+    return {"status": "ok", "service": "messages"}
 
 
 @app.post("/messages")
-def post_message(payload: dict):
-    conv_id = payload.get("conversation_id")
-    role = payload.get("role", "user")
-    content = payload.get("message") or payload.get("content")
-    if content is None:
-        raise HTTPException(status_code=400, detail="message/content required")
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-        (conv_id, role, content, datetime.utcnow().isoformat()),
-    )
-    conn.commit()
-    mid = cur.lastrowid
-    conn.close()
-    return {"status": "ok", "id": mid, "conversation_id": conv_id, "role": role, "content": content}
+def create_message(payload: MessageCreate):
+    """Create a new message"""
+    try:
+        message_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        item = {
+            "conversation_id": payload.conversation_id,
+            "message_id": message_id,
+            "role": payload.role,
+            "message": payload.message,
+            "timestamp": timestamp,
+        }
+        
+        table.put_item(Item=item)
+        logger.info(f"Message created: {message_id}")
+        
+        return {
+            "id": message_id,
+            "conversation_id": payload.conversation_id,
+            "role": payload.role,
+            "message": payload.message,
+            "timestamp": timestamp,
+        }
+    except Exception as e:
+        logger.error(f"Error creating message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/messages")
-def list_messages():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, conversation_id, role, content, created_at FROM messages ORDER BY id ASC")
-    rows = cur.fetchall()
-    out = []
-    for r in rows:
-        out.append({"id": r["id"], "conversation_id": r["conversation_id"], "role": r["role"], "content": r["content"], "created_at": r["created_at"]})
-    conn.close()
-    return out
+@app.get("/conversations/{conversation_id}")
+def get_conversation_messages(conversation_id: str):
+    """Get all messages for a conversation"""
+    try:
+        response = table.query(
+            KeyConditionExpression="conversation_id = :cid",
+            ExpressionAttributeValues={":cid": conversation_id},
+            ScanIndexForward=True  # Sort by timestamp ascending
+        )
+        
+        messages = []
+        for item in response.get("Items", []):
+            messages.append({
+                "id": item["message_id"],
+                "conversation_id": conversation_id,
+                "role": item.get("role"),
+                "message": item.get("message"),
+                "content": item.get("message"),  # Alias for compatibility
+                "timestamp": item.get("timestamp"),
+            })
+        
+        return messages
+    except Exception as e:
+        logger.error(f"Error getting conversation messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/messages/{message_id}")
+def get_message(message_id: str):
+    """Get a specific message"""
+    try:
+        # Scan for the message (inefficient in production, should use GSI)
+        response = table.scan(
+            FilterExpression="message_id = :mid",
+            ExpressionAttributeValues={":mid": message_id}
+        )
+        
+        items = response.get("Items", [])
+        if not items:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        item = items[0]
+        return {
+            "id": message_id,
+            "conversation_id": item.get("conversation_id"),
+            "role": item.get("role"),
+            "message": item.get("message"),
+            "timestamp": item.get("timestamp"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/messages/{message_id}")
+def delete_message(message_id: str):
+    """Delete a message (soft delete recommended in production)"""
+    try:
+        # Scan to find and delete
+        response = table.scan(
+            FilterExpression="message_id = :mid",
+            ExpressionAttributeValues={":mid": message_id}
+        )
+        
+        items = response.get("Items", [])
+        if not items:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        item = items[0]
+        table.delete_item(
+            Key={
+                "conversation_id": item["conversation_id"],
+                "message_id": message_id
+            }
+        )
+        
+        logger.info(f"Message deleted: {message_id}")
+        return {"status": "deleted", "message_id": message_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/messages/{message_id}/update")
+def update_message(message_id: str, payload: dict):
+    """Update a message"""
+    try:
+        # Scan to find message
+        response = table.scan(
+            FilterExpression="message_id = :mid",
+            ExpressionAttributeValues={":mid": message_id}
+        )
+        
+        items = response.get("Items", [])
+        if not items:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        item = items[0]
+        timestamp = datetime.utcnow().isoformat()
+        
+        table.update_item(
+            Key={
+                "conversation_id": item["conversation_id"],
+                "message_id": message_id
+            },
+            UpdateExpression="SET #msg = :m, updated_at = :upd",
+            ExpressionAttributeNames={"#msg": "message"},
+            ExpressionAttributeValues={
+                ":m": payload.get("message"),
+                ":upd": timestamp
+            }
+        )
+        
+        logger.info(f"Message updated: {message_id}")
+        return {"status": "updated", "message_id": message_id, "timestamp": timestamp}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

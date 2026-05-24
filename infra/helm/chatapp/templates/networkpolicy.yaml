@@ -1,0 +1,249 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+# Default deny all ingress and egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chatbot-default-deny
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Allow DNS (Egress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chatbot-allow-dns
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
+          namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# Allow Frontend to accept traffic from ALB/Ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000
+
+---
+# Allow Frontend to talk to Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# Allow Gateway to accept traffic from Frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-allow-frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# Allow Gateway to talk to backend services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-allow-backends
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              workload: api
+      ports:
+        - protocol: TCP
+          port: 8001
+        - protocol: TCP
+          port: 8002
+        - protocol: TCP
+          port: 8003
+    # Allow egress to AWS SQS and DynamoDB
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Allow backend services to accept traffic from Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backends-allow-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      workload: api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: gateway
+      ports:
+        - protocol: TCP
+          port: 8001
+        - protocol: TCP
+          port: 8002
+        - protocol: TCP
+          port: 8003
+
+---
+# Allow backend services to call AWS services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backends-allow-aws
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      workload: api
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DynamoDB and SQS (HTTPS/443)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Allow AI Worker to access AWS SQS and DynamoDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-worker-allow-aws
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai-worker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: ai-worker
+  policyTypes:
+    - Egress
+  egress:
+    # Allow AWS API calls (HTTPS/443)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Allow traffic between services for inter-service communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backends-interservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      workload: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              workload: api
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              workload: api
+{{- end }}

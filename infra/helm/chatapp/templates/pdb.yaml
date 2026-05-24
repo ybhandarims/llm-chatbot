@@ -1,0 +1,103 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+# PDB for Frontend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.frontend.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
+
+---
+# PDB for Gateway (critical service)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.gateway.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
+
+---
+# PDB for Settings Service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: settings-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: settings
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.settings.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: settings
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
+
+---
+# PDB for Conversations Service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: conversations-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: conversations
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.conversations.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: conversations
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
+
+---
+# PDB for Messages Service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: messages-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: messages
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.messages.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: messages
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
+
+---
+# PDB for AI Worker
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-worker-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai-worker
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.ai.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: ai-worker
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
+{{- end }}

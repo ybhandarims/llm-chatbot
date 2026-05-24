@@ -1,0 +1,214 @@
+{{- if .Values.autoscaling.enabled }}
+---
+# HPA for Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: {{ .Values.autoscaling.frontend.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.frontend.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.frontend.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.frontend.targetMemoryUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+
+---
+# HPA for Gateway
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+  minReplicas: {{ .Values.autoscaling.gateway.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.gateway.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.gateway.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.gateway.targetMemoryUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+      selectPolicy: Max
+
+---
+# HPA for Settings Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: settings-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: settings
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: settings
+  minReplicas: {{ .Values.autoscaling.settings.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.settings.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.settings.targetCPUUtilizationPercentage }}
+
+---
+# HPA for Conversations Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: conversations-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: conversations
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: conversations
+  minReplicas: {{ .Values.autoscaling.conversations.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.conversations.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.conversations.targetCPUUtilizationPercentage }}
+
+---
+# HPA for Messages Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: messages-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: messages
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: messages
+  minReplicas: {{ .Values.autoscaling.messages.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.messages.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.messages.targetCPUUtilizationPercentage }}
+
+---
+# HPA for AI Worker (can scale based on queue depth with KEDA in future)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-worker-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-worker
+  minReplicas: {{ .Values.autoscaling.ai.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.ai.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.ai.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+{{- end }}

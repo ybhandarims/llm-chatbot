@@ -7,7 +7,12 @@ metadata:
 {{ include "chatapp.labels" . | indent 4 }}
     app.kubernetes.io/component: conversations
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/component: conversations
@@ -16,34 +21,71 @@ spec:
       labels:
         app.kubernetes.io/component: conversations
 {{ include "chatapp.labels" . | indent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
     spec:
+      serviceAccountName: chatbot-workload
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - conversations
+                topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        workload: api
       containers:
         - name: conversations
           image: {{ .Values.images.conversations.repository }}:{{ .Values.images.conversations.tag }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
-            - containerPort: 8002
+            - name: http
+              containerPort: 8002
           env:
-            - name: CONVERSATIONS_DB
-              value: /data/conversations.db
-          volumeMounts:
-            - name: data
-              mountPath: /data
+            - name: AWS_REGION
+              value: "{{ .Values.aws.region }}"
+            - name: DYNAMODB_TABLE
+              value: "{{ .Values.dynamodb.conversationsTable }}"
+            - name: LOG_LEVEL
+              value: "INFO"
+          envFrom:
+            - configMapRef:
+                name: {{ include "chatapp.fullname" . }}-config
+            - secretRef:
+                name: {{ include "chatapp.fullname" . }}-secret
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
           readinessProbe:
             httpGet:
               path: /health
-              port: 8002
-            initialDelaySeconds: 5
-            periodSeconds: 10
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
           livenessProbe:
             httpGet:
               path: /health
-              port: 8002
-            initialDelaySeconds: 10
-            periodSeconds: 20
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
           resources:
-{{ toYaml .Values.resources.backend | indent 12 }}
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: conversations-data
+{{ toYaml .Values.resources.conversations | indent 12 }}
+      terminationGracePeriodSeconds: 30
