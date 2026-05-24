@@ -1,12 +1,13 @@
 # LLM Chatbot Infrastructure Implementation Runbook
 
-**Version**: 1.0  
+**Version**: 2.0  
 **Date**: May 24, 2026  
-**Duration**: 4-6 hours (including EKS cluster creation wait time)  
-**Last Updated**: May 24, 2026
+**Duration**: 4-6 hours (including EKS cluster creation wait time) + 5 minutes for Phase 0  
+**Last Updated**: May 25, 2026
 
 ## Table of Contents
 
+0. [Phase 0: Code Repository Setup](#phase-0-code-repository-setup) ⭐ **START HERE**
 1. [Prerequisites](#prerequisites)
 2. [Architecture Overview](#architecture-overview)
 3. [Phase 1: Environment Setup](#phase-1-environment-setup)
@@ -25,7 +26,7 @@
 
 ## Prerequisites
 
-### Required Tools
+### Required Tools & Source Code
 
 ```bash
 # Verify all tools are installed
@@ -34,7 +35,15 @@ eksctl version             # eksctl 0.170+
 kubectl version --client   # kubectl 1.29+
 helm version               # Helm 3.12+
 docker --version           # Docker 24.0+
+git --version              # Git (for cloning repository)
 jq --version               # jq 1.6+ (optional)
+
+# Source code repository
+# This runbook assumes the llm-chatbot repository is cloned
+# All phases reference files from this repository:
+# - microservices/     (Dockerfiles for 6 services)
+# - infra/             (EKS cluster config, Helm charts)
+# - docker-compose.yml (reference for local development)
 ```
 
 ### AWS Account Requirements
@@ -111,6 +120,182 @@ AWS Services:
 | Node Scaling | HPA for pods, EKS auto scaling for nodes | Right-size dynamically |
 | Logging | CloudWatch (7-day retention) | Integrated, affordable |
 | AI Cost | Optimize prompts, use cheaper models | Main cost driver, not infra |
+
+---
+
+## Phase 0: Code Repository Setup ⭐ **START HERE**
+
+**Duration**: 5 minutes  
+**Goal**: Clone the source code repository and verify directory structure
+
+### ⚠️ **CRITICAL: This Phase Must Be Completed First**
+
+All subsequent phases reference files from this repository:
+- **microservices/** = Source code and Dockerfiles for all 6 services
+- **infra/eksctl/** = EKS cluster configuration (cluster.yaml)
+- **infra/helm/chatapp/** = Helm charts for Kubernetes deployment
+- **infra/scripts/** = Utility scripts for deployment
+
+**Without this step, you won't have access to Dockerfiles, cluster configs, or deployment charts.**
+
+### Step 0.1: Clone Repository
+
+**Bash (Linux/macOS)**:
+```bash
+# Create a working directory
+mkdir -p ~/projects
+cd ~/projects
+
+# Clone the repository
+git clone https://github.com/your-org/llm-chatbot.git
+cd llm-chatbot
+
+# Expected output:
+# Cloning into 'llm-chatbot'...
+# remote: Enumerating objects...
+# Receiving objects: 100%...
+```
+
+**PowerShell (Windows)**:
+```powershell
+# Create working directory
+New-Item -ItemType Directory -Path "$Env:USERPROFILE\projects" -Force
+cd "$Env:USERPROFILE\projects"
+
+# Clone repository
+git clone https://github.com/your-org/llm-chatbot.git
+cd llm-chatbot
+
+# Alternative: using SSH
+git clone git@github.com:your-org/llm-chatbot.git
+cd llm-chatbot
+```
+
+### Step 0.2: Verify Directory Structure
+
+```bash
+# List the main directory structure
+ls -la
+
+# Expected output:
+# ├── infra/                      (Infrastructure code)
+# │   ├── README.md              (Infrastructure overview)
+# │   ├── INFRASTRUCTURE_RUNBOOK.md (This file!)
+# │   ├── eksctl/                (EKS cluster configuration)
+# │   │   └── cluster.yaml       (Cluster definition)
+# │   ├── helm/                  (Kubernetes deployment charts)
+# │   │   └── chatapp/
+# │   │       ├── Chart.yaml
+# │   │       ├── values.yaml
+# │   │       └── templates/    (K8s manifests)
+# │   ├── scripts/               (Deployment utilities)
+# │   │   └── push-images.sh
+# │   └── cleanup/               (Cleanup documentation)
+# ├── microservices/             (Application code - CRITICAL)
+# │   ├── README.md
+# │   ├── docker-compose.yml    (Local dev reference)
+# │   ├── frontend/
+# │   │   ├── Dockerfile        ← Needed for Phase 3
+# │   │   ├── package.json
+# │   │   └── public/
+# │   ├── gateway/
+# │   │   ├── Dockerfile        ← Needed for Phase 3
+# │   │   ├── main.py
+# │   │   └── requirements.txt
+# │   ├── ai-service/
+# │   │   ├── Dockerfile        ← Needed for Phase 3
+# │   │   ├── main.py
+# │   │   └── requirements.txt
+# │   ├── conversations-service/
+# │   ├── messages-service/
+# │   ├── settings-service/
+# │   └── scripts/
+# ├── monolithic_app/            (Reference implementation)
+# │   ├── backend/
+# │   ├── frontend/
+# │   └── README.md
+# └── docker-compose.yml        (Local development - optional)
+```
+
+**Verify critical files exist**:
+```bash
+# Check for all Dockerfiles
+find microservices -name "Dockerfile" -type f
+# Expected: 6 Dockerfiles
+
+# Check for Helm chart
+ls -la infra/helm/chatapp/
+# Expected: Chart.yaml, values.yaml, templates/
+
+# Check for EKS config
+ls -la infra/eksctl/
+# Expected: cluster.yaml
+```
+
+### Step 0.3: Set Repository Root Path
+
+**Bash**:
+```bash
+# Export repository path for use in other phases
+export REPO_ROOT=$(pwd)
+echo "Repository root: $REPO_ROOT"
+
+# Verify - should output the full path
+echo $REPO_ROOT
+# Example output: /home/ec2-user/llm-chatbot
+# or: /Users/yourname/projects/llm-chatbot
+# or: C:\Users\YourName\projects\llm-chatbot (PowerShell)
+```
+
+**PowerShell**:
+```powershell
+# Set repository root
+$Env:REPO_ROOT = (Get-Location).Path
+Write-Host "Repository root: $Env:REPO_ROOT"
+
+# Verify
+Write-Host $Env:REPO_ROOT
+# Example output: C:\Users\YourName\projects\llm-chatbot
+```
+
+**Important**: Keep this terminal open or set it as persistent environment variable:
+```bash
+# Bash - Add to ~/.bashrc or ~/.zshrc
+echo 'export REPO_ROOT=/path/to/llm-chatbot' >> ~/.bashrc
+
+# PowerShell - Add to profile
+# Go to $PROFILE path and add: $Env:REPO_ROOT = "C:\Users\...\llm-chatbot"
+```
+
+### Step 0.4: Quick Verification Checklist
+
+```bash
+# ✓ Repository cloned
+test -d .git && echo "✓ Git repository found" || echo "✗ Git repository NOT found"
+
+# ✓ Source code present
+test -d microservices && echo "✓ Microservices directory found" || echo "✗ Microservices NOT found"
+
+# ✓ Infrastructure files present
+test -f infra/eksctl/cluster.yaml && echo "✓ EKS cluster config found" || echo "✗ EKS config NOT found"
+test -d infra/helm/chatapp && echo "✓ Helm chart found" || echo "✗ Helm chart NOT found"
+
+# ✓ All Dockerfiles present
+test $(find microservices -name "Dockerfile" | wc -l) -eq 6 && echo "✓ All 6 Dockerfiles found" || echo "✗ Missing Dockerfiles"
+
+# ✓ Verify current directory
+pwd
+# Should output path to llm-chatbot
+```
+
+✅ **Success Criteria**:
+- Repository cloned successfully
+- All 6 microservices present in `microservices/`
+- Helm charts present in `infra/helm/chatapp/`
+- EKS cluster config present in `infra/eksctl/cluster.yaml`
+- Repository root path exported (REPO_ROOT variable set)
+
+⚠️ **Do NOT proceed to Phase 1 until all checks above pass**
 
 ---
 
@@ -544,10 +729,8 @@ aws ecr get-login-password --region ${AWS_REGION} | \
 
 **PowerShell**:
 ```powershell
-# Navigate to microservices directory
 cd .\microservices
 
-# Build and push each service
 $services = @(
     @{name="frontend"; context="."},
     @{name="gateway"; context="./gateway"},
@@ -558,23 +741,15 @@ $services = @(
 )
 
 foreach ($svc in $services) {
-    $imageName = "llm-chatbot/$($svc.name)"
-    
-    Write-Host "Building $imageName..."
-    docker build -t ${imageName}:latest -t ${imageName}:v1 $svc.context
-    
-    # Tag for ECR
-    docker tag ${imageName}:latest $Env:ECR_REGISTRY/${imageName}:latest
-    docker tag ${imageName}:v1 $Env:ECR_REGISTRY/${imageName}:v1
-    
-    # Push to ECR
-    Write-Host "Pushing $imageName to ECR..."
-    docker push $Env:ECR_REGISTRY/${imageName}:latest
-    docker push $Env:ECR_REGISTRY/${imageName}:v1
-}
+    $localImage = "llm-chatbot/$($svc.name)"
+    $ecrImage = "$Env:ECR_REGISTRY/$localImage"
 
-# Return to repo root
-cd ..
+    docker build -t "$localImage:latest" -t "$localImage:v1" $svc.context
+    docker tag "$localImage:latest" "$ecrImage:latest"
+    docker tag "$localImage:v1" "$ecrImage:v1"
+    docker push "$ecrImage:latest"
+    docker push "$ecrImage:v1"
+}
 ```
 
 **Bash**:
