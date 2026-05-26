@@ -29,7 +29,6 @@ spec:
         runAsNonRoot: true
         runAsUser: 101
         runAsGroup: 101
-        fsReadOnlyRootFilesystem: false
         seccompProfile:
           type: RuntimeDefault
       

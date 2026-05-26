@@ -30,7 +30,6 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
-        fsReadOnlyRootFilesystem: false
         seccompProfile:
           type: RuntimeDefault
       

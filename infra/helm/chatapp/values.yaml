@@ -1,6 +1,6 @@
 namespace: chatbot
 
-imagePullPolicy: IfNotPresent
+imagePullPolicy: Always
 
 # ECR Image registries (Update with your AWS account ID and region)
 images:
