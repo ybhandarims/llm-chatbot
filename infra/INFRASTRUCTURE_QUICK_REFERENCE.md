@@ -341,9 +341,59 @@ kubectl get events -n chatbot
 3. **Create resources**: Follow phases 1-8 in runbook
 4. **Test deployment**: Run verification commands
 5. **Monitor**: Use CloudWatch and kubectl commands
+6. **Cleanup**: Follow Phase 10 cleanup commands when ready to teardown
 
 ---
 
-**Last Updated**: May 24, 2026
+## Phase 10: Complete Infrastructure Cleanup
+
+**⚠️ WARNING**: These commands DELETE all resources permanently
+
+```bash
+# 1. Delete Helm release
+helm uninstall llm-chatbot -n chatbot
+
+# 2. Delete Kubernetes namespace
+kubectl delete namespace chatbot
+
+# 3. Delete EKS cluster (WAIT 10-15 MINUTES)
+eksctl delete cluster --name llm-chatbot --region us-east-1 --wait
+
+# 4. Delete DynamoDB tables
+aws dynamodb delete-table --table-name conversations --region us-east-1
+aws dynamodb delete-table --table-name messages --region us-east-1
+aws dynamodb delete-table --table-name settings --region us-east-1
+
+# 5. Delete SQS queues (Get URLs first)
+MAIN_QUEUE=$(aws sqs get-queue-url --queue-name ai-jobs.fifo --region us-east-1 --query 'QueueUrl' --output text)
+DLQ=$(aws sqs get-queue-url --queue-name ai-jobs-dlq.fifo --region us-east-1 --query 'QueueUrl' --output text)
+aws sqs delete-queue --queue-url "$MAIN_QUEUE"
+aws sqs delete-queue --queue-url "$DLQ"
+
+# 6. Delete ECR repositories
+for repo in frontend gateway settings conversations messages ai-worker; do
+  aws ecr delete-repository --repository-name llm-chatbot/$repo --force --region us-east-1
+done
+
+# 7. Verify cleanup
+echo "DynamoDB tables:" && aws dynamodb list-tables --region us-east-1 | grep TableNames
+echo "SQS queues:" && aws sqs list-queues --region us-east-1 2>/dev/null || echo "✅ No queues found"
+echo "ECR repos:" && aws ecr describe-repositories --region us-east-1 | grep -i llm-chatbot || echo "✅ No llm-chatbot repos found"
+echo "EKS clusters:" && eksctl get clusters || echo "✅ No clusters found"
+
+# Cost savings achieved
+echo ""
+echo "✅ Cleanup Complete"
+echo "📊 Monthly Savings: \$464 (on-demand) or \$254 (Spot)"
+echo "📊 Annual Savings: \$5,568 (on-demand) or \$3,048 (Spot)"
+```
+
+**Cleanup Time**: ~45 minutes  
+**Billing**: Stops within 5-10 minutes  
+**For detailed instructions**: See [Phase 10 in INFRASTRUCTURE_RUNBOOK.md](INFRASTRUCTURE_RUNBOOK.md#phase-10-cleanup--teardown-complete)
+
+---
+
+**Last Updated**: May 27, 2026 (Phase 10 Complete)
 
 For detailed step-by-step instructions, see: [INFRASTRUCTURE_RUNBOOK.md](INFRASTRUCTURE_RUNBOOK.md)
