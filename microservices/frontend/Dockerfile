@@ -27,7 +27,7 @@ RUN rm -f /etc/nginx/conf.d/default.conf
 RUN mkdir -p /tmp/nginx/{client_temp,proxy_temp,uwsgi_temp,scgi_temp} \
     && mkdir -p /var/cache/nginx \
     && mkdir -p /var/log/nginx \
-    && chown -R nginx:nginx /tmp/nginx /var/cache/nginx /var/log/nginx /var/run/nginx.pid \
+    && chown -R nginx:nginx /tmp/nginx /var/cache/nginx /var/log/nginx \
     && chmod -R 755 /tmp/nginx /var/cache/nginx /var/log/nginx
 
 # Copy custom nginx config (uses /tmp paths, no user directive)
@@ -45,15 +45,5 @@ USER nginx
 
 EXPOSE 3000
 
-# Start nginx directly (no entrypoint script nonsense)
-CMD ["nginx", "-g", "daemon off;"]
-
-# Expose port
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
-
-# Start nginx
+# Start nginx directly
 CMD ["nginx", "-g", "daemon off;"]
