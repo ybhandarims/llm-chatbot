@@ -247,7 +247,7 @@ sequenceDiagram
 	Note over AI,DDB: Error Handling & Resilience
 	opt If AI processing fails
 		AI->>AI: Check retry count
-		break If retries < 3
+		alt If retries < 3
 			AI->>SQS: Return job (visibility timeout)
 			Note over SQS: Retry in 30 seconds
 		else If retries >= 3
