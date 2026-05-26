@@ -23,6 +23,9 @@ FROM nginx:1.24
 # Remove default nginx config
 RUN rm -f /etc/nginx/conf.d/default.conf
 
+# Remove the entrypoint directory and entrypoint script entirely to prevent configuration
+RUN rm -rf /docker-entrypoint.d /docker-entrypoint.sh /etc/docker/
+
 # Create all required temp directories with proper permissions AS ROOT (before USER nginx)
 RUN mkdir -p /tmp/nginx/{client_temp,proxy_temp,uwsgi_temp,scgi_temp} \
     && mkdir -p /var/cache/nginx \
@@ -40,10 +43,15 @@ COPY --from=builder /app/public /usr/share/nginx/html
 # Ensure html directory permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html && chmod -R 755 /usr/share/nginx/html
 
+# Create custom entrypoint script BEFORE switching user (so we can write to root fs)
+RUN printf '#!/bin/sh\nexec nginx -g "daemon off;"\n' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh && \
+    chown nginx:nginx /entrypoint.sh
+
 # Switch to nginx user for security
 USER nginx
 
 EXPOSE 3000
 
-# Start nginx directly
-CMD ["nginx", "-g", "daemon off;"]
+# Use our entrypoint to bypass the nginx entrypoint script entirely
+ENTRYPOINT ["/entrypoint.sh"]
