@@ -98,17 +98,8 @@ spec:
           resources:
 {{ toYaml .Values.resources.frontend | indent 12 }}
           
-          volumeMounts:
-            - name: cache
-              mountPath: /usr/share/nginx/cache
-            - name: nginx-tmp
-              mountPath: /tmp/nginx
+          volumeMounts: []
       
-      volumes:
-        - name: cache
-          emptyDir: {}
-        - name: nginx-tmp
-          emptyDir: {}
       
       terminationGracePeriodSeconds: 30
       restartPolicy: Always
