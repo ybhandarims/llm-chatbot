@@ -532,8 +532,7 @@ aws sqs create-queue `
     "FifoQueue=true",
     "VisibilityTimeout=30",
     "MessageRetentionPeriod=345600",
-    "DeduplicationScope=messageBody",
-    "FifoThroughputLimit=autoscaling"
+    "ContentBasedDeduplication=true"
   ) `
   --region $Env:AWS_REGION
 
@@ -541,7 +540,8 @@ Write-Host "✓ Main queue ai-jobs.fifo created"
 Write-Host "  - FIFO ordering enabled (per MessageGroupId)"
 Write-Host "  - Visibility timeout: 30 seconds (for worker processing)"
 Write-Host "  - Message retention: 4 days (345,600 seconds)"
-Write-Host "  - Deduplication: Enabled"
+Write-Host "  - Content-based deduplication: Enabled"
+Write-Host "  - Throughput: Standard FIFO (PER_MESSAGE_PER_SECOND)"
 
 # Create Dead Letter Queue for failed jobs
 aws sqs create-queue `
@@ -550,7 +550,7 @@ aws sqs create-queue `
     "FifoQueue=true",
     "VisibilityTimeout=60",
     "MessageRetentionPeriod=1209600",
-    "DeduplicationScope=messageBody"
+    "ContentBasedDeduplication=true"
   ) `
   --region $Env:AWS_REGION
 
@@ -574,19 +574,20 @@ Write-Host "DLQ: $DLQ"
 # Create main FIFO queue for AI job processing
 aws sqs create-queue \
   --queue-name ai-jobs.fifo \
-  --attributes FifoQueue=true,VisibilityTimeout=30,MessageRetentionPeriod=345600,DeduplicationScope=messageBody,FifoThroughputLimit=autoscaling \
+  --attributes FifoQueue=true,VisibilityTimeout=30,MessageRetentionPeriod=345600,ContentBasedDeduplication=true \
   --region ${AWS_REGION}
 
 echo "✓ Main queue ai-jobs.fifo created"
 echo "  - FIFO ordering enabled (per MessageGroupId = user_id)"
 echo "  - Visibility timeout: 30 seconds (for AI worker processing)"
 echo "  - Message retention: 4 days (345,600 seconds)"
-echo "  - Auto-scaling enabled for throughput"
+echo "  - Content-based deduplication: Enabled"
+echo "  - Throughput: Standard FIFO (PER_MESSAGE_PER_SECOND)"
 
 # Create Dead Letter Queue for failed jobs (after 3 retries)
 aws sqs create-queue \
   --queue-name ai-jobs-dlq.fifo \
-  --attributes FifoQueue=true,VisibilityTimeout=60,MessageRetentionPeriod=1209600,DeduplicationScope=messageBody \
+  --attributes FifoQueue=true,VisibilityTimeout=60,MessageRetentionPeriod=1209600,ContentBasedDeduplication=true \
   --region ${AWS_REGION}
 
 echo "✓ Dead Letter Queue ai-jobs-dlq.fifo created"
