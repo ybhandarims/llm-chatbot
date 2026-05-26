@@ -123,15 +123,23 @@ aws dynamodb scan --table-name conversations > conversations-backup.json
 # List queues
 aws sqs list-queues
 
-# Get queue URL
-QUEUE=$(aws sqs get-queue-url --queue-name ai-jobs.fifo --query QueueUrl --output text)
-echo $QUEUE
+# Get queue URLs first (IMPORTANT: Variables must be set)
+MAIN_QUEUE=$(aws sqs get-queue-url --queue-name ai-jobs.fifo --region us-east-1 --query QueueUrl --output text)
+DLQ=$(aws sqs get-queue-url --queue-name ai-jobs-dlq.fifo --region us-east-1 --query QueueUrl --output text)
+
+# Verify variables
+echo "Main: $MAIN_QUEUE"
+echo "DLQ: $DLQ"
 
 # Get queue attributes
-aws sqs get-queue-attributes --queue-url $QUEUE --attribute-names ApproximateNumberOfMessages
+aws sqs get-queue-attributes --queue-url "$MAIN_QUEUE" --attribute-names ApproximateNumberOfMessages
 
-# Delete queue
-aws sqs delete-queue --queue-url $QUEUE
+# Delete queues (with proper quoting)
+aws sqs delete-queue --queue-url "$MAIN_QUEUE"
+aws sqs delete-queue --queue-url "$DLQ"
+
+# Verify deletion
+aws sqs list-queues --region us-east-1
 ```
 
 ---
