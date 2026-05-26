@@ -5,22 +5,22 @@ imagePullPolicy: Always
 # ECR Image registries (Update with your AWS account ID and region)
 images:
   frontend:
-    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/frontend"
+    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/frontend"
     tag: "latest"
   gateway:
-    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/gateway"
+    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/gateway"
     tag: "latest"
   settings:
-    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/settings"
+    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/settings"
     tag: "latest"
   conversations:
-    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/conversations"
+    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/conversations"
     tag: "latest"
   messages:
-    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/messages"
+    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/messages"
     tag: "latest"
   ai:
-    repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/ai-worker"
+    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/ai-worker"
     tag: "latest"
 
 # Service configuration
@@ -45,7 +45,7 @@ ingress:
 # IRSA (IAM Roles for Service Accounts)
 irsa:
   enabled: true
-  roleArn: "arn:aws:iam::ACCOUNT_ID:role/llm-chatbot-workload"
+  roleArn: "arn:aws:iam::396608772637:role/llm-chatbot-workload"
   serviceAccount: chatbot-workload
 
 # Resource requirements for budget-conscious setup
