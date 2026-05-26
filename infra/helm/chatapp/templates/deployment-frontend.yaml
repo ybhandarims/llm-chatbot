@@ -27,7 +27,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
+        runAsUser: 101
+        runAsGroup: 101
         fsReadOnlyRootFilesystem: false
         seccompProfile:
           type: RuntimeDefault
@@ -100,9 +101,13 @@ spec:
           volumeMounts:
             - name: cache
               mountPath: /usr/share/nginx/cache
+            - name: nginx-tmp
+              mountPath: /tmp
       
       volumes:
         - name: cache
+          emptyDir: {}
+        - name: nginx-tmp
           emptyDir: {}
       
       terminationGracePeriodSeconds: 30
