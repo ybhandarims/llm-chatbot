@@ -1139,41 +1139,68 @@ aws:
 
 ### Step 5.2: Create Kubernetes Namespace & Secrets
 
-**PowerShell**:
+**PowerShell** (Idempotent - safe to run multiple times):
 ```powershell
-# Create namespace
-kubectl create namespace chatbot
+# Create namespace only if it doesn't exist
+$ns = kubectl get namespace chatbot 2>$null
+if ($LASTEXITCODE -ne 0) {
+  kubectl create namespace chatbot
+  Write-Host "✓ Namespace 'chatbot' created"
+} else {
+  Write-Host "✓ Namespace 'chatbot' already exists"
+}
 
-# Label namespace for network policies
-kubectl label namespace chatbot name=chatbot
+# Label namespace (--overwrite handles existing labels)
+kubectl label namespace chatbot name=chatbot --overwrite | Out-Null
+Write-Host "✓ Namespace labeled"
 
-# Create OpenAI secret
+# Delete and recreate secret to ensure fresh API key
+kubectl delete secret llm-chatbot-secret -n chatbot 2>$null | Out-Null
 kubectl create secret generic llm-chatbot-secret `
   --from-literal=OPENAI_API_KEY=$Env:OPENAI_API_KEY `
   -n chatbot
+Write-Host "✓ Secret 'llm-chatbot-secret' created/updated"
 
-# Verify secret created
+# Verify
+Write-Host "`n✓ Final state:"
+kubectl get namespace chatbot --show-labels
 kubectl get secrets -n chatbot
 ```
 
-**Bash**:
+**Bash** (Idempotent - safe to run multiple times):
 ```bash
-# Create namespace
-kubectl create namespace chatbot
+#!/bin/bash
 
-# Label namespace
-kubectl label namespace chatbot name=chatbot
+# Create namespace only if it doesn't exist
+if ! kubectl get namespace chatbot &>/dev/null; then
+  kubectl create namespace chatbot
+  echo "✓ Namespace 'chatbot' created"
+else
+  echo "✓ Namespace 'chatbot' already exists"
+fi
 
-# Create secret
+# Label namespace (--overwrite handles existing labels)
+kubectl label namespace chatbot name=chatbot --overwrite
+echo "✓ Namespace labeled"
+
+# Delete and recreate secret to ensure fresh API key
+kubectl delete secret llm-chatbot-secret -n chatbot 2>/dev/null || true
 kubectl create secret generic llm-chatbot-secret \
   --from-literal=OPENAI_API_KEY="${OPENAI_API_KEY}" \
   -n chatbot
+echo "✓ Secret 'llm-chatbot-secret' created/updated"
 
 # Verify
+echo ""
+echo "✓ Final state:"
+kubectl get namespace chatbot --show-labels
 kubectl get secrets -n chatbot
 ```
 
-**Expected output**: Secret `llm-chatbot-secret` created
+**Expected output**: 
+- Namespace exists with `name=chatbot` label
+- Secret `llm-chatbot-secret` exists and contains OPENAI_API_KEY
+- Safe to re-run without errors
 
 ### Step 5.3: Deploy with Helm
 
