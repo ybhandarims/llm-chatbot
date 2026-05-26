@@ -183,6 +183,8 @@ flowchart TB
 
 When a user sends a message in **production** (with SQS async processing):
 
+> **💡 Tip**: To view this diagram on [mermaid.live](https://mermaid.live), copy only the code **between** the backticks (don't include ` ```mermaid ` or ` ``` ` in your copy).
+
 ```mermaid
 sequenceDiagram
 	autonumber
@@ -281,6 +283,8 @@ sequenceDiagram
 ## Request Flow - Original Learning
 
 When a user sends a message in the **learning/original architecture** (synchronous, blocking):
+
+> **💡 Tip**: To view this diagram on [mermaid.live](https://mermaid.live), copy only the code **between** the backticks (don't include ` ```mermaid ` or ` ``` ` in your copy).
 
 ```mermaid
 sequenceDiagram
