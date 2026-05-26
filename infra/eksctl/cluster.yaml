@@ -80,9 +80,11 @@ vpc:
   cidr: "10.0.0.0/16"
   nat:
     gateway: HighlyAvailable  # One NAT per AZ for HA
-  clusterEndpoints:
-    publicAccess: true
-    privateAccess: true
+
+# Cluster endpoint access (public + private for security)
+# This allows accessing cluster from outside while supporting private access
+privateCluster:
+  enabled: false  # Keep public access enabled
 
 # Multiple Node Groups for workload separation (Budget-Conscious)
 managedNodeGroups:
