@@ -46,6 +46,49 @@ jq --version               # jq 1.6+ (optional)
 # - docker-compose.yml (reference for local development)
 ```
 
+### Installing Tools on Ubuntu/Linux EC2
+
+If running on Ubuntu/Linux EC2 and any tools are missing, install them:
+
+```bash
+# Update package manager
+sudo apt-get update
+
+# Install AWS CLI v2
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+
+# Install kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+kubectl version --client
+
+# Install eksctl
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+sudo mv /tmp/eksctl /usr/local/bin
+eksctl version
+
+# Install Helm (3.12+) - REQUIRED for Phase 4.4
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+helm version
+
+# Install Docker
+sudo apt-get install -y docker.io
+sudo usermod -aG docker $USER
+newgrp docker
+docker --version
+
+# Install jq (optional, for JSON parsing)
+sudo apt-get install -y jq
+jq --version
+
+# Verify all tools
+echo "✓ All tools installed. Verify:"
+aws --version && eksctl version && kubectl version --client && helm version && docker --version && git --version
+```
+
 ### AWS Account Requirements
 
 ```
@@ -987,12 +1030,21 @@ Remove-Item ./alb-policy.json
 
 **Bash**:
 ```bash
-# Add Helm repo
+# Step 1: Verify Helm is installed (install if missing)
+if ! command -v helm &> /dev/null; then
+    echo "Installing Helm..."
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+fi
+
+helm version
+
+# Step 2: Add Helm repo
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
 
-# Create IAM policy
-cat > alb-policy.json <<EOF
+# Step 3: Create IAM policy (skip if already exists)
+if ! aws iam get-policy --policy-arn arn:aws:iam::aws:policy/AWSLoadBalancingFullAccess &> /dev/null; then
+    cat > alb-policy.json <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -1008,32 +1060,37 @@ cat > alb-policy.json <<EOF
   ]
 }
 EOF
+    
+    aws iam create-policy \
+      --policy-name AWSLoadBalancerControllerPolicy \
+      --policy-document file://./alb-policy.json
+    
+    rm alb-policy.json
+else
+    echo "✓ IAM policy already exists"
+fi
 
-aws iam create-policy \
-  --policy-name AWSLoadBalancerControllerPolicy \
-  --policy-document file://./alb-policy.json
+# Step 4: Service account is already created by eksctl during cluster setup
+# Skip manual creation to avoid conflicts
+echo "✓ Service account already configured by eksctl"
 
-# Create service account
-kubectl create serviceaccount aws-load-balancer-controller -n kube-system
-
-# Attach IAM role
-eksctl create iamserviceaccount \
-  --cluster=${CLUSTER_NAME} \
-  --region=${AWS_REGION} \
-  --namespace=kube-system \
-  --name=aws-load-balancer-controller \
-  --override-existing-serviceaccounts \
-  --attach-policy-arn=arn:aws:iam::aws:policy/AWSLoadBalancingFullAccess
-
-# Install ALB controller
+# Step 5: Install ALB controller with Helm
 helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
   -n kube-system \
   --set clusterName=${CLUSTER_NAME} \
   --set serviceAccount.create=false \
   --set serviceAccount.name=aws-load-balancer-controller
 
-# Verify
-kubectl get deployment -n kube-system aws-load-balancer-controller
+# Step 6: Verify ALB controller is running
+echo "Waiting for ALB controller to be ready (this may take 2-3 minutes)..."
+sleep 15
+
+kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=5m
+
+# Step 7: Check status
+echo "✓ ALB Controller Status:"
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+```
 
 # Cleanup
 rm alb-policy.json
