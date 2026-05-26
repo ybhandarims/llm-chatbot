@@ -335,6 +335,203 @@ sequenceDiagram
 
 ---
 
+## How It Works - Deep Dive
+
+### Async Production Flow Explained
+
+#### **Phase 1: Synchronous Request Reception (0-100ms)**
+
+When the user sends a message:
+
+1. **Gateway validates** the request and creates a unique `job_id`
+2. **Conversation is created** (if needed) and message is stored immediately
+3. **SQS job is queued** with `{job_id, conversation_id, user_message, context}`
+4. **User immediately gets feedback**: `{job_id, status: "queued"}` (100ms response time)
+
+**Why this is fast**: The gateway doesn't wait for AI processing—it just enqueues a job and responds.
+
+#### **Phase 2: Asynchronous Worker Processing (1-30 seconds)**
+
+While the user sees "Processing...", in the background:
+
+1. **AI Workers poll SQS** every 5 seconds for available jobs
+2. **One worker claims the job** and processes it:
+   - Fetches full conversation history
+   - Retrieves system prompt from Settings service
+   - Calls OpenAI API (2-5 seconds of total processing time)
+   - Stores the assistant response to DynamoDB
+3. **Job is deleted from SQS** after successful completion
+
+**Why workers can scale independently**: Each worker is stateless and can process multiple jobs in parallel.
+
+#### **Phase 3: Frontend Update (polling/SSE)**
+
+The frontend doesn't wait passively:
+
+1. **Poll every 2 seconds**: `GET /api/job/{job_id}/status`
+2. **Gateway queries latest messages** for that conversation
+3. **When response appears**, frontend displays it automatically
+
+**Alternative**: Replace polling with Server-Sent Events (SSE) for real-time updates.
+
+#### **Phase 4: Error Handling & Resilience**
+
+If the AI Worker crashes or hits an error:
+
+1. **SQS visibility timeout** (30 seconds): Job becomes visible again automatically
+2. **Automatic retry**: Worker picks it up again (happens up to 3 times)
+3. **After 3 failed attempts**: Job moves to **Dead Letter Queue** for manual investigation
+4. **No user-facing impact**: User just sees "Processing..." for longer
+
+---
+
+### Synchronous Learning Flow Explained
+
+#### **The Blocking Problem**
+
+In the original synchronous architecture:
+
+1. User sends message → Gateway receives it
+2. Gateway blocks, waiting for AI response:
+   - Fetch conversation history
+   - Call OpenAI API (2-5 seconds)
+   - Wait for response
+3. **Total request time: 3-7 seconds** (user stares at loading screen)
+
+#### **Why This Limits Scale**
+
+- Each API request ties up a gateway worker thread
+- With 10 concurrent users × 5-second wait = 50 worker threads needed just for idle time
+- If OpenAI is slow, users wait even longer
+- No graceful degradation (failure = immediate error)
+
+#### **When This Makes Sense**
+
+This approach is perfect when:
+- Building demos or MVPs
+- Testing ideas locally
+- Understanding how services communicate
+- Synchronous flow is easier to debug
+
+---
+
+### Key Differences: Async vs Synchronous
+
+| Aspect | Async (Production) | Synchronous (Learning) |
+|--------|-------------------|----------------------|
+| **User Experience** | Instant feedback (~100ms) | Wait for response (3-7s) |
+| **Bottleneck** | None (queue absorbs spikes) | Single AI service thread |
+| **Scalability** | Horizontal (add workers) | Vertical (bigger servers) |
+| **Failure Impact** | Isolated (worker death ≠ user impact) | Immediate (user sees error) |
+| **Retries** | Automatic (up to 3 times) | Manual or built-in timeout |
+| **Cost** | Lower (idle workers cost less) | Higher (always-on threads) |
+| **Code Complexity** | Async patterns, polling/SSE | Simpler, direct calls |
+| **Deployment** | Cloud-native (EKS, SQS) | Anywhere (Docker Compose) |
+
+---
+
+### How SQS Queue Works (Production)
+
+#### **Queue Mechanics**
+
+```
+┌─────────────────────────────────────┐
+│   SQS Main Queue (ai-jobs.fifo)     │
+├─────────────────────────────────────┤
+│ Job #1: {conv_id, message, context} │ ← Waiting
+│ Job #2: {conv_id, message, context} │ ← Waiting
+│ Job #3: {conv_id, message, context} │ ← Processing (AI-Worker-1 claimed it)
+│ Job #4: {conv_id, message, context} │ ← Waiting
+└─────────────────────────────────────┘
+
+Worker A polls: Gets Job #1, processes it, deletes it
+Worker B polls: Gets Job #2, processes it, deletes it
+Worker C polls: Gets Job #4, processes it, deletes it
+```
+
+#### **Visibility Timeout**
+
+If a worker crashes while processing Job #3:
+
+1. **Default visibility timeout = 30 seconds**
+2. Job #3 is hidden from other workers while being processed
+3. **If worker doesn't delete it in 30 seconds**, it becomes visible again
+4. **Another worker picks it up** and tries again
+5. **After 3 attempts**, it moves to Dead Letter Queue
+
+#### **FIFO Guarantee** (ai-jobs.fifo)
+
+- Messages are processed in order (important for conversation context)
+- Exactly-once delivery (no duplicate processing)
+- Deduplication by `job_id`
+
+---
+
+### Frontend Polling Mechanism
+
+#### **How It Works**
+
+```javascript
+// Every 2 seconds:
+async function pollJobStatus() {
+  const response = await fetch(`/api/job/${jobId}/status`);
+  const { status, messages } = await response.json();
+  
+  if (status === "completed") {
+    displayMessages(messages);
+    clearInterval(pollInterval);  // Stop polling
+  } else if (status === "processing") {
+    showSpinner();  // Keep showing "Processing..."
+  } else if (status === "error") {
+    showError("Job failed");
+  }
+}
+```
+
+#### **Why Polling vs WebSockets?**
+
+**Polling (current approach):**
+- ✅ Simple to implement
+- ✅ Works behind corporate firewalls
+- ✅ No special infrastructure
+- ❌ Slight delay (up to 2 seconds before user sees response)
+- ❌ Extra network traffic
+
+**WebSockets/SSE (future optimization):**
+- ✅ Real-time updates (milliseconds)
+- ✅ Less network traffic
+- ❌ More complex to implement
+- ❌ Requires persistent connection
+
+---
+
+### Auto-Scaling Behavior
+
+#### **How Workers Scale (Production)**
+
+```
+Low Traffic:          Moderate Traffic:      Traffic Spike:
+┌────────┐          ┌────────┐            ┌────────┐
+│ AI-W1  │          │ AI-W1  │            │ AI-W1  │
+│ AI-W2  │          │ AI-W2  │            │ AI-W2  │
+│ AI-W3  │          │ AI-W3  │            │ AI-W3  │
+│        │          │ AI-W4  │ (scaled)   │ AI-W4  │
+│  CPU   │          │ AI-W5  │            │ AI-W5  │
+│  15%   │          │  CPU   │            │ AI-W6  │
+└────────┘          │  60%   │            │ AI-W7  │
+                    └────────┘            │ AI-W8  │
+                                          │  CPU   │
+                                          │  40%   │
+                                          └────────┘
+```
+
+- **SQS queue depth** triggers auto-scaling rules
+- If `queue_depth > 10 messages`, Kubernetes spins up more AI workers
+- Workers terminate when queue is empty and CPU is low
+- **Result**: Traffic spikes don't cause failed requests, just longer processing time
+
+---
+
 ## Repository Layout
 
 ```
