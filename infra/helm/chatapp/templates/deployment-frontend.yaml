@@ -101,7 +101,7 @@ spec:
             - name: cache
               mountPath: /usr/share/nginx/cache
             - name: nginx-tmp
-              mountPath: /tmp
+              mountPath: /tmp/nginx
       
       volumes:
         - name: cache
