@@ -3,7 +3,7 @@
 **Version**: 2.0  
 **Date**: May 24, 2026  
 **Duration**: 4-6 hours (including EKS cluster creation wait time) + 5 minutes for Phase 0  
-**Last Updated**: May 25, 2026
+**Last Updated**: May 26, 2026
 
 ## Table of Contents
 
@@ -1556,7 +1556,282 @@ kubectl describe sa chatbot-workload -n chatbot
 
 ---
 
-## Phase 6.5: AI Worker Background Processing Configuration
+### Step 6.3: Verify DynamoDB Table Access
+
+**Goal**: Test that Kubernetes pods can access DynamoDB tables with the new IAM role
+
+**PowerShell**:
+```powershell
+# Create a test pod with the chatbot-workload service account
+kubectl run dynamodb-test --rm -it --image=amazon/aws-cli:latest --serviceaccount=chatbot-workload -n chatbot --command -- /bin/sh
+
+# Inside the pod, run these commands:
+# 1. Verify AWS credentials are available
+aws sts get-caller-identity
+
+# Expected output: Shows the role ARN (arn:aws:iam::ACCOUNT:role/llm-chatbot-workload)
+
+# 2. Test DynamoDB access - scan conversations table
+aws dynamodb scan --table-name conversations --region us-east-1 --max-items 5
+
+# Expected output: Returns table items (even if empty initially)
+
+# 3. Test write permission - put a test item
+aws dynamodb put-item --table-name conversations \
+  --item '{"user_id": {"S": "test-user"}, "conversation_id": {"S": "test-conv-123"}, "title": {"S": "Test Conversation"}}' \
+  --region us-east-1
+
+# 4. Verify the item was written
+aws dynamodb get-item --table-name conversations \
+  --key '{"user_id": {"S": "test-user"}, "conversation_id": {"S": "test-conv-123"}}' \
+  --region us-east-1
+
+# 5. Clean up test data
+aws dynamodb delete-item --table-name conversations \
+  --key '{"user_id": {"S": "test-user"}, "conversation_id": {"S": "test-conv-123"}}' \
+  --region us-east-1
+
+# Exit the pod
+exit
+```
+
+**Bash** (same commands, but in pod):
+```bash
+# Create test pod
+kubectl run dynamodb-test --rm -it \
+  --image=amazon/aws-cli:latest \
+  --serviceaccount=chatbot-workload \
+  -n chatbot \
+  --command -- /bin/sh
+
+# Inside pod:
+aws sts get-caller-identity
+aws dynamodb scan --table-name conversations --region us-east-1 --max-items 5
+aws dynamodb put-item --table-name conversations \
+  --item '{"user_id": {"S": "test-user"}, "conversation_id": {"S": "test-conv-123"}, "title": {"S": "Test Conversation"}}' \
+  --region us-east-1
+aws dynamodb get-item --table-name conversations \
+  --key '{"user_id": {"S": "test-user"}, "conversation_id": {"S": "test-conv-123"}}' \
+  --region us-east-1
+aws dynamodb delete-item --table-name conversations \
+  --key '{"user_id": {"S": "test-user"}, "conversation_id": {"S": "test-conv-123"}}' \
+  --region us-east-1
+exit
+```
+
+**Expected Output**:
+```
+{
+    "UserId": "AIDAI...",
+    "Account": "123456789012",
+    "Arn": "arn:aws:iam::123456789012:role/llm-chatbot-workload"
+}
+
+Items: [] or existing items (depends on database state)
+
+{
+    "ConsumedCapacity": {...}
+}
+```
+
+✅ **Success Criteria**:
+- Pod assumes the llm-chatbot-workload IAM role
+- Can read from DynamoDB tables (Scan, GetItem)
+- Can write to DynamoDB tables (PutItem)
+- Can delete from DynamoDB tables (DeleteItem)
+
+---
+
+### Step 6.4: Verify SQS Queue Access
+
+**Goal**: Test that Kubernetes pods can access SQS queues with the new IAM role
+
+**PowerShell**:
+```powershell
+# Get queue URLs (set as variables from earlier phases)
+$MAIN_QUEUE = "https://sqs.us-east-1.amazonaws.com/123456789012/ai-jobs.fifo"
+$DLQ = "https://sqs.us-east-1.amazonaws.com/123456789012/ai-jobs-dlq.fifo"
+
+# Create a test pod with chatbot-workload service account
+kubectl run sqs-test --rm -it --image=amazon/aws-cli:latest --serviceaccount=chatbot-workload -n chatbot --command -- /bin/sh
+
+# Inside the pod, run these commands:
+# 1. Verify role assumption
+aws sts get-caller-identity
+
+# 2. List SQS queues
+aws sqs list-queues --region us-east-1
+
+# Expected: Shows ai-jobs.fifo and ai-jobs-dlq.fifo
+
+# 3. Get queue attributes (check queue exists and is accessible)
+aws sqs get-queue-attributes --queue-url $MAIN_QUEUE --attribute-names All --region us-east-1
+
+# 4. Send test message to queue
+aws sqs send-message \
+  --queue-url $MAIN_QUEUE \
+  --message-body '{"test": "connectivity-check", "timestamp": "2024-05-26T10:00:00Z"}' \
+  --message-group-id "test-group" \
+  --region us-east-1
+
+# Expected: Returns MessageId
+
+# 5. Receive message from queue
+aws sqs receive-message --queue-url $MAIN_QUEUE --region us-east-1
+
+# Expected: Returns the message we just sent
+
+# 6. Delete message from queue
+aws sqs delete-message \
+  --queue-url $MAIN_QUEUE \
+  --receipt-handle <RECEIPT_HANDLE_FROM_RECEIVE> \
+  --region us-east-1
+
+# 7. Check DLQ is accessible
+aws sqs get-queue-attributes --queue-url $DLQ --attribute-names All --region us-east-1
+
+# Exit pod
+exit
+```
+
+**Bash** (same commands):
+```bash
+# Get queue URLs
+MAIN_QUEUE="https://sqs.us-east-1.amazonaws.com/123456789012/ai-jobs.fifo"
+DLQ="https://sqs.us-east-1.amazonaws.com/123456789012/ai-jobs-dlq.fifo"
+
+# Create test pod
+kubectl run sqs-test --rm -it \
+  --image=amazon/aws-cli:latest \
+  --serviceaccount=chatbot-workload \
+  -n chatbot \
+  --command -- /bin/sh
+
+# Inside pod:
+aws sts get-caller-identity
+aws sqs list-queues --region us-east-1
+aws sqs get-queue-attributes --queue-url ${MAIN_QUEUE} --attribute-names All --region us-east-1
+aws sqs send-message \
+  --queue-url ${MAIN_QUEUE} \
+  --message-body '{"test": "connectivity-check"}' \
+  --message-group-id "test-group" \
+  --region us-east-1
+aws sqs receive-message --queue-url ${MAIN_QUEUE} --region us-east-1
+exit
+```
+
+**Expected Output**:
+```
+{
+    "QueueUrls": [
+        "https://sqs.us-east-1.amazonaws.com/123456789012/ai-jobs.fifo",
+        "https://sqs.us-east-1.amazonaws.com/123456789012/ai-jobs-dlq.fifo"
+    ]
+}
+
+{
+    "MessageId": "12345678-1234-1234-1234-123456789012",
+    "MD5OfMessageBody": "abc123...",
+    "SequenceNumber": "18..."
+}
+```
+
+✅ **Success Criteria**:
+- Pod assumes llm-chatbot-workload role
+- Can list SQS queues
+- Can read queue attributes
+- Can send messages to queue
+- Can receive messages from queue
+- DLQ is accessible
+
+---
+
+### Step 6.5: Test Service Connectivity
+
+**Goal**: Verify that deployed services can reach all AWS resources
+
+**PowerShell**:
+```powershell
+# Test from gateway pod
+$GATEWAY_POD = (kubectl get pods -n chatbot -l app=gateway -o jsonpath='{.items[0].metadata.name}')
+
+Write-Host "Testing from Gateway pod: $GATEWAY_POD"
+
+# Test 1: Check AWS credentials are available
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws sts get-caller-identity
+
+# Test 2: Check DynamoDB access
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws dynamodb list-tables --region us-east-1
+
+# Expected: conversations, messages, settings
+
+# Test 3: Check SQS access
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws sqs list-queues --region us-east-1
+
+# Expected: ai-jobs.fifo, ai-jobs-dlq.fifo
+
+# Test 4: Check Secrets Manager access
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws secretsmanager get-secret-value --secret-id llm-chatbot/openai-key --region us-east-1
+
+# Expected: SecretString with OPENAI_API_KEY value
+
+# Test 5: Check internal pod-to-pod connectivity
+kubectl exec -it $GATEWAY_POD -n chatbot -- curl -v http://settings:8080/health
+
+# Expected: HTTP 200 response
+
+# Test from AI Worker pod
+$AI_POD = (kubectl get pods -n chatbot -l app=ai-worker -o jsonpath='{.items[0].metadata.name}')
+
+Write-Host "Testing from AI Worker pod: $AI_POD"
+
+# Check it can reach gateway
+kubectl exec -it $AI_POD -n chatbot -- curl -v http://gateway:8080/health
+
+# Check DynamoDB and SQS from AI Worker
+kubectl exec -it $AI_POD -n chatbot -- aws dynamodb list-tables --region us-east-1
+kubectl exec -it $AI_POD -n chatbot -- aws sqs list-queues --region us-east-1
+```
+
+**Bash**:
+```bash
+# Get pod names
+GATEWAY_POD=$(kubectl get pods -n chatbot -l app=gateway -o jsonpath='{.items[0].metadata.name}')
+AI_POD=$(kubectl get pods -n chatbot -l app=ai-worker -o jsonpath='{.items[0].metadata.name}')
+
+echo "Testing from Gateway pod: $GATEWAY_POD"
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws sts get-caller-identity
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws dynamodb list-tables --region us-east-1
+kubectl exec -it $GATEWAY_POD -n chatbot -- aws sqs list-queues --region us-east-1
+kubectl exec -it $GATEWAY_POD -n chatbot -- curl http://settings:8080/health
+
+echo "Testing from AI Worker pod: $AI_POD"
+kubectl exec -it $AI_POD -n chatbot -- aws sts get-caller-identity
+kubectl exec -it $AI_POD -n chatbot -- aws dynamodb list-tables --region us-east-1
+kubectl exec -it $AI_POD -n chatbot -- aws sqs list-queues --region us-east-1
+kubectl exec -it $AI_POD -n chatbot -- curl http://gateway:8080/health
+```
+
+**Expected Output**:
+```
+✓ Both pods assume llm-chatbot-workload role
+✓ Both can list DynamoDB tables
+✓ Both can list SQS queues
+✓ Both can retrieve secrets
+✓ Pod-to-pod networking works (HTTP 200)
+```
+
+✅ **Success Criteria**:
+- All pods have working AWS credentials (IRSA)
+- DynamoDB tables are accessible from all pods
+- SQS queues are accessible from all pods
+- Secrets Manager is accessible
+- Pod-to-pod communication works
+- No permission errors in any pod
+
+---
+
+## Phase 6.6: AI Worker Background Processing Configuration
 
 **Duration**: 5 minutes  
 **Goal**: Configure auto-scaling for AI worker pods based on SQS queue depth
