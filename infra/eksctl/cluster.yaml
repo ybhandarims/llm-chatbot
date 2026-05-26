@@ -83,9 +83,6 @@ vpc:
   clusterEndpoints:
     publicAccess: true
     privateAccess: true
-  publicAccess:
-    cidrs:
-      - 0.0.0.0/0
 
 # Multiple Node Groups for workload separation (Budget-Conscious)
 managedNodeGroups:

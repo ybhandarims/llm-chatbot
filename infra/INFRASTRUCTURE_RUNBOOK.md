@@ -667,7 +667,7 @@ foreach ($service in $services) {
       --repository-name llm-chatbot/$service `
       --region $Env:AWS_REGION `
       --image-scanning-configuration scanOnPush=true `
-      --encryption-configuration encryptionType=AES
+      --encryption-configuration encryptionType=AES256
     
     echo "Created repository: llm-chatbot/$service"
 }
@@ -684,7 +684,7 @@ for service in frontend gateway settings conversations messages ai-worker; do
       --repository-name llm-chatbot/$service \
       --region ${AWS_REGION} \
       --image-scanning-configuration scanOnPush=true \
-      --encryption-configuration encryptionType=AES
+      --encryption-configuration encryptionType=AES256
     
     echo "Created repository: llm-chatbot/$service"
 done
@@ -728,7 +728,11 @@ aws ecr get-login-password --region ${AWS_REGION} | \
 
 **From repository root** (where docker-compose.yml is):
 
-**PowerShell**:
+⚠️ **IMPORTANT**: 
+- **Windows users**: Use the **PowerShell** section below
+- **Linux/macOS/Ubuntu EC2 users**: Use the **Bash** section below (do NOT use PowerShell code on Linux)
+
+**PowerShell** (Windows only):
 ```powershell
 cd .\microservices
 
@@ -799,11 +803,36 @@ aws ecr describe-images --repository-name llm-chatbot/gateway --region $Env:AWS_
 
 **Bash**:
 ```bash
-# List all images
+# Option 1: Simple verification (shows all image details)
 for repo in frontend gateway settings conversations messages ai-worker; do
     echo "Images in llm-chatbot/$repo:"
     aws ecr describe-images --repository-name llm-chatbot/$repo --region ${AWS_REGION}
+    echo ""
 done
+
+# Option 2: Compact verification (shows only image tags)
+echo "=== Compact Image Summary ==="
+for repo in frontend gateway settings conversations messages ai-worker; do
+    echo -n "llm-chatbot/$repo: "
+    aws ecr describe-images --repository-name llm-chatbot/$repo --region ${AWS_REGION} --query 'imageDetails[*].imageTags' --output text
+done
+
+# Option 3: Count total images
+echo ""
+echo "Total images pushed:"
+aws ecr list-images --repository-name llm-chatbot/frontend --region ${AWS_REGION} --query 'imageIds' --output json | jq 'length'
+```
+
+**Expected output**:
+```
+llm-chatbot/frontend: ['latest', 'v1']
+llm-chatbot/gateway: ['latest', 'v1']
+llm-chatbot/settings: ['latest', 'v1']
+llm-chatbot/conversations: ['latest', 'v1']
+llm-chatbot/messages: ['latest', 'v1']
+llm-chatbot/ai-worker: ['latest', 'v1']
+
+Total images pushed: 2 per repository = 12 total images
 ```
 
 ✅ **Success Criteria**:
