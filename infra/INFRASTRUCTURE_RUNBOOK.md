@@ -1150,9 +1150,17 @@ if ($LASTEXITCODE -ne 0) {
   Write-Host "✓ Namespace 'chatbot' already exists"
 }
 
-# Label namespace (--overwrite handles existing labels)
-kubectl label namespace chatbot name=chatbot --overwrite | Out-Null
-Write-Host "✓ Namespace labeled"
+# Add Helm management metadata (required for Helm to manage the namespace)
+kubectl annotate namespace chatbot `
+  meta.helm.sh/release-name=llm-chatbot `
+  meta.helm.sh/release-namespace=chatbot `
+  --overwrite 2>$null | Out-Null
+
+kubectl label namespace chatbot `
+  app.kubernetes.io/managed-by=Helm `
+  name=chatbot `
+  --overwrite | Out-Null
+Write-Host "✓ Namespace labeled with Helm metadata"
 
 # Delete and recreate secret to ensure fresh API key
 kubectl delete secret llm-chatbot-secret -n chatbot 2>$null | Out-Null
@@ -1179,9 +1187,17 @@ else
   echo "✓ Namespace 'chatbot' already exists"
 fi
 
-# Label namespace (--overwrite handles existing labels)
-kubectl label namespace chatbot name=chatbot --overwrite
-echo "✓ Namespace labeled"
+# Add Helm management metadata (required for Helm to manage the namespace)
+kubectl annotate namespace chatbot \
+  meta.helm.sh/release-name=llm-chatbot \
+  meta.helm.sh/release-namespace=chatbot \
+  --overwrite 2>/dev/null
+
+kubectl label namespace chatbot \
+  app.kubernetes.io/managed-by=Helm \
+  name=chatbot \
+  --overwrite
+echo "✓ Namespace labeled with Helm metadata"
 
 # Delete and recreate secret to ensure fresh API key
 kubectl delete secret llm-chatbot-secret -n chatbot 2>/dev/null || true
@@ -1198,9 +1214,11 @@ kubectl get secrets -n chatbot
 ```
 
 **Expected output**: 
-- Namespace exists with `name=chatbot` label
+- Namespace exists with `name=chatbot`, `app.kubernetes.io/managed-by=Helm` labels
+- Namespace has Helm metadata annotations (release-name, release-namespace)
 - Secret `llm-chatbot-secret` exists and contains OPENAI_API_KEY
 - Safe to re-run without errors
+- Helm can now successfully import and manage the namespace
 
 ### Step 5.3: Deploy with Helm
 
