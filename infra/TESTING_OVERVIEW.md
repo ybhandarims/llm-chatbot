@@ -106,6 +106,12 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
   - Mock those dependencies (preferred), or
   - Move slow/integration tests to a separate workflow that runs on `main` only, not on every PR.
 
+## Recent CI note
+
+- On 2026-05-31, the `Microservices Unit Tests` workflow run passed, but the `Integration Tests (main)` workflow run failed on the conversations-service report step.
+- I reran `microservices/conversations-service/tests/test_api.py` locally and it passed, and the generated JUnit XML reported `failures="0"`.
+- For now, treat that integration failure as CI-specific until the failing artifact or GitHub Actions log shows a reproducible assertion error.
+
 ## Troubleshooting common failures
 
 - JSDOM network errors (ECONNREFUSED): caused by `index.html` linking `/assets/app.js` or `/assets/styles.css` which JSDOM tries to fetch. Fixes:
@@ -175,7 +181,7 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
 - Common troubleshooting actions (what to do when a test fails):
   - Click the failing job in the workflow run to view the step logs — logs show stack traces and the exact failing assertion.
   - Download the JUnit XML artifact and open it with a text editor to see which test name failed and any failure messages. You can also upload the XML to test-report viewers if needed.
-  - If the failure is in the frontend tests, download `frontend-tests.xml` (from the artifact `frontend-test-report`) — it contains the converted results from the Node test run.
+  - If the failure is in the frontend tests, download `frontend-tests.xml` (from the artifact `frontend-test-report`) — it contains the direct JUnit results from Node's built-in reporter.
 
 - Quick local commands that mirror CI (copy/paste):
   - Full 6-service pass:
@@ -196,7 +202,7 @@ pytest microservices/conversations-service/tests/test_health.py --junitxml=repor
 pytest microservices/conversations-service/tests/test_api.py --junitxml=reports/conversations-integration.xml
 ```
 
-  - Frontend tests (JSON -> JUnit):
+  - Frontend tests (JUnit XML):
 
 ```bash
 cd microservices/frontend
