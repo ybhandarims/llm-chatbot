@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360">
+  <rect width="100%" height="100%" fill="#071127" rx="8"/>
+  <text x="24" y="40" fill="#ffffff" font-size="20" font-family="Arial">Tests Tab — summary</text>
+  <g transform="translate(24,64)">
+    <rect x="0" y="0" width="840" height="260" fill="#0b2030" rx="6" stroke="#27475f"/>
+    <text x="12" y="28" fill="#9fbfdf" font-size="14">Tests</text>
+    <g transform="translate(12,56)" fill="#dbeeff" font-size="12">
+      <text y="0">Total: 12  Passed: 11  Failed: 1</text>
+      <text y="28">Failures:</text>
+      <text y="52">- conversations-service.tests.test_api::test_create_get_append_delete_conversation</text>
+    </g>
+  </g>
+</svg>

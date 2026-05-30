@@ -31,4 +31,18 @@ Tips for clear screenshots
 - Expand the specific job/step so the failing lines are visible in a single screenshot.
 - If you need to redact secrets or tokens, blur or crop them before sharing.
 
-If you want, I can add a small PowerShell script that uses the GitHub CLI to download the latest artifact automatically — would you like that? 
+If you want, I can add a small PowerShell script that uses the GitHub CLI to download the latest artifact automatically — would you like that?
+
+Sample annotated images
+
+Below are simple sample images you can use as reference when taking screenshots. They are stored in `infra/images/` in the repository.
+
+![Workflows list](infra/images/actions-workflow-list.svg)
+
+![Run summary](infra/images/actions-run-summary.svg)
+
+![Job logs example](infra/images/actions-job-logs.svg)
+
+![Tests tab example](infra/images/actions-tests-tab.svg)
+
+![Artifacts panel example](infra/images/actions-artifacts.svg)

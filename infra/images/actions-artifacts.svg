@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360">
+  <rect width="100%" height="100%" fill="#071127" rx="8"/>
+  <text x="24" y="40" fill="#ffffff" font-size="20" font-family="Arial">Artifacts — download test reports</text>
+  <g transform="translate(24,64)">
+    <rect x="0" y="0" width="840" height="260" fill="#0b2030" rx="6" stroke="#27475f"/>
+    <text x="12" y="28" fill="#9fbfdf" font-size="14">Artifacts</text>
+    <g transform="translate(12,56)" fill="#dbeeff" font-size="12">
+      <text y="0">python-unit-reports-ai-service (download)</text>
+      <text y="28">python-unit-reports-gateway (download)</text>
+      <text y="56">frontend-test-report (download)</text>
+    </g>
+  </g>
+</svg>
