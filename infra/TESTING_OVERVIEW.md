@@ -10,6 +10,20 @@ This document describes the automated tests currently present in the repository,
 
 Triggering: the workflow runs on `push`, `pull_request` (paths limited to `microservices/**` and the workflow file), and can be manually triggered via `workflow_dispatch`.
 
+## Plain-language summary (what we changed and what runs in CI)
+
+- What we added recently:
+  - a GitHub Actions workflow under `.github/workflows/microservices-unit-tests.yml` to run tests for each microservice;
+  - minimal unit/health tests for each Python microservice so CI fails fast on broken imports or missing endpoints;
+  - an API-level test for the `conversations-service` that exercises create/get/append/list/delete flows using an in-memory fake DynamoDB table;
+  - a frontend DOM-level test (JSDOM) that simulates the browser, submits the chat form, and asserts the UI updates.
+
+- In very simple terms — which tests run where:
+  - GitHub Actions (CI) runs the same commands we run locally: it executes `pytest` for each Python service (so it runs both the tiny health/unit tests and any API tests placed under `microservices/<service>/tests`), and it runs `npm test` in `microservices/frontend` (so it executes the JSDOM frontend tests).
+  - So: the CI job named `python-unit-tests` will run *unit* and *API* tests that live under each service `tests` folder. The `frontend-unit-tests` job runs the *frontend DOM/UI* tests.
+
+If you prefer CI to separate very-fast unit tests from slower API/integration tests, I can split those into separate jobs (units on PRs, integrations on main).
+
 ## Tests available now (summary)
 
 - Python microservice health/unit checks (fast)
