@@ -122,6 +122,57 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
 - Add coverage collection to measure test coverage per service.
 
 ---
+## CI artifacts — a plain-language guide (where to find test reports and what they mean)
+
+If you're not familiar with CI artifacts and JUnit reports, here's a simple, step-by-step explanation in plain language.
+
+- What happens when CI runs tests:
+  - Each workflow job (for example the Python unit job or the frontend job) runs the test commands and writes a small report file describing which tests passed and which failed.
+  - For Python we produce JUnit XML files (small XML documents) named like `reports/<service>-unit.xml` or `reports/<service>-integration.xml`.
+  - For the frontend we run Node's test runner to a JSON file and convert that JSON into a JUnit XML file (`reports/frontend-tests.xml`).
+
+- Where CI stores those reports:
+  - After a job finishes, the workflow uploads those XML files as "artifacts" attached to the workflow run. You can download them later.
+
+- How to find the reports in GitHub (step-by-step):
+  1. Open the repository in GitHub and click the **Actions** tab.
+ 2. Pick the workflow you want (for example "Microservices Unit Tests" or "Integration Tests").
+ 3. Select a specific run from the list (the runs are ordered by time, newest first).
+ 4. On the right-hand side of the run page you will see an **Artifacts** section. Click the artifact name (for example `python-unit-reports-ai-service`) to download the XML file.
+ 5. Also check the **Tests** tab (if present) on the run page — the test reporter action we added will show a friendly summary of test suites and failures there.
+
+- Common troubleshooting actions (what to do when a test fails):
+  - Click the failing job in the workflow run to view the step logs — logs show stack traces and the exact failing assertion.
+  - Download the JUnit XML artifact and open it with a text editor to see which test name failed and any failure messages. You can also upload the XML to test-report viewers if needed.
+  - If the failure is in the frontend tests, download `frontend-tests.xml` (from the artifact `frontend-test-report`) — it contains the converted results from the Node test run.
+
+- Quick local commands that mirror CI (copy/paste):
+  - Python unit test (writes JUnit XML):
+
+```bash
+pytest microservices/conversations-service/tests/test_health.py --junitxml=reports/conversations-unit.xml
+```
+
+  - Python integration test (writes JUnit XML):
+
+```bash
+pytest microservices/conversations-service/tests/test_api.py --junitxml=reports/conversations-integration.xml
+```
+
+  - Frontend tests (JSON -> JUnit):
+
+```bash
+cd microservices/frontend
+node --test --reporter=json tests/*.test.js > reports/frontend-tests.json
+node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml
+```
+
+- Naming conventions used by our workflows (so you can quickly locate the right artifact):
+  - `python-unit-reports-<service>` — uploaded artifact for each Python service's fast unit/health tests.
+  - `frontend-test-report` — uploaded artifact that contains the frontend JUnit XML.
+  - `python-integration-reports-<service>` — uploaded artifact for integration/API tests run on `main`.
+
+If you'd like, I can add a short screenshot guide (image) showing where to click in the Actions UI, or add a tiny script that automatically downloads the latest test artifact for a workflow run.
 If you want, I can:
 - Mark each existing test as `unit` or `integration` and adjust the workflow to run only units on PRs.
 - Add JUnit-style test reporting to the workflow.
