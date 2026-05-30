@@ -78,12 +78,11 @@ jobs:
         working-directory: microservices/frontend
         run: npm install
 
-      - name: Run frontend unit tests (Node test runner) and save JSON
+      - name: Run frontend unit tests (Node test runner) and save JUnit XML
         working-directory: microservices/frontend
         run: |
           mkdir -p reports
-          node --test --reporter=json tests/*.test.js > reports/frontend-tests.json || true
-          node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml || true
+          node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js || true
 
       - name: Upload frontend test report
         uses: actions/upload-artifact@v7
