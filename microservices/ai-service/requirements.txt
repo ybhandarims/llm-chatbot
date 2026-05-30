@@ -2,5 +2,5 @@ fastapi
 uvicorn[standard]
 openai
 boto3
-httpx
+httpx2
 python-json-logger

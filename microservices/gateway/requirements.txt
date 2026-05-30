@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-httpx
+httpx2
 boto3
 pydantic
 python-json-logger
