@@ -9,7 +9,7 @@ from typing import Optional
 import os
 import logging
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -87,7 +87,7 @@ def update_settings(payload: SettingsUpdate):
     """Update user settings"""
     try:
         user_id = "default_user"  # In production, extract from JWT
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         # Get current settings
         current_settings = get_settings()
@@ -128,7 +128,7 @@ def reset_settings():
     """Reset settings to defaults"""
     try:
         user_id = "default_user"  # In production, extract from JWT
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         item = {
             "user_id": user_id,

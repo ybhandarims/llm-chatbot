@@ -8,7 +8,7 @@ import json
 import uuid
 import logging
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
@@ -83,7 +83,7 @@ def send_to_sqs(job_data: dict) -> str:
     job_id = str(uuid.uuid4())
     message = {
         "job_id": job_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         **job_data
     }
     
@@ -211,7 +211,7 @@ async def send_chat_message(payload: ChatMessage, background_tasks: BackgroundTa
             "conversation_id": conversation_id,
             "role": "user",
             "message": message,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         
         await proxy_request(

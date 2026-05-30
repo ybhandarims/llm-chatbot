@@ -5,7 +5,7 @@ import boto3
 import json
 import logging
 from typing import Any, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class DynamoDBService:
         """Store an item in DynamoDB"""
         try:
             if 'created_at' not in item:
-                item['created_at'] = datetime.utcnow().isoformat()
+                item['created_at'] = datetime.now(timezone.utc).isoformat()
             self.table.put_item(Item=item)
             logger.info(f"Item stored in {self.table_name}")
             return True
@@ -58,7 +58,7 @@ class DynamoDBService:
         try:
             update_expression = "SET " + ", ".join([f"{k}=:{k}" for k in updates.keys()])
             expression_values = {f":{k}": v for k, v in updates.items()}
-            expression_values['updated_at'] = datetime.utcnow().isoformat()
+            expression_values['updated_at'] = datetime.now(timezone.utc).isoformat()
             update_expression += ", updated_at=:updated_at"
             
             self.table.update_item(

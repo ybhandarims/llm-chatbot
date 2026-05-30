@@ -10,7 +10,7 @@ import os
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import boto3
 
 # Configure logging
@@ -59,7 +59,7 @@ def create_conversation(payload: ConversationCreate):
     try:
         conversation_id = str(uuid.uuid4())
         user_id = "default_user"  # In production, extract from JWT
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         item = {
             "user_id": user_id,
@@ -151,7 +151,7 @@ def append_message(conversation_id: str, payload: Message):
     """Append a message to a conversation"""
     try:
         user_id = "default_user"  # In production, extract from JWT
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         # Get current conversation
         response = table.get_item(

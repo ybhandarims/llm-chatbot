@@ -10,7 +10,7 @@ import os
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import boto3
 
 # Configure logging
@@ -55,7 +55,7 @@ def create_message(payload: MessageCreate):
     """Create a new message"""
     try:
         message_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         item = {
             "conversation_id": payload.conversation_id,
@@ -182,7 +182,7 @@ def update_message(message_id: str, payload: dict):
             raise HTTPException(status_code=404, detail="Message not found")
         
         item = items[0]
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         table.update_item(
             Key={

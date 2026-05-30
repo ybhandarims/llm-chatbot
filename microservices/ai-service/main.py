@@ -8,7 +8,8 @@ import json
 import logging
 import asyncio
 import httpx
-from datetime import datetime
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 import boto3
 from openai import OpenAI
 
@@ -166,7 +167,7 @@ class AIWorker:
                         "conversation_id": conversation_id,
                         "role": role,
                         "message": content,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
                 return response.status_code == 200
@@ -178,7 +179,7 @@ class AIWorker:
         """Send message to Dead Letter Queue"""
         try:
             dlq_body = json.loads(message.get('Body', '{}'))
-            dlq_body['failed_at'] = datetime.utcnow().isoformat()
+            dlq_body['failed_at'] = datetime.now(timezone.utc).isoformat()
             dlq_body['reason'] = 'Max retries exceeded'
             
             sqs_client.send_message(
@@ -238,29 +239,31 @@ class AIWorker:
 worker = AIWorker()
 
 
+@asynccontextmanager
+async def lifespan(app):
+    worker_task = asyncio.create_task(worker.run())
+    try:
+        yield
+    finally:
+        worker.stop()
+        if not worker_task.done():
+            worker_task.cancel()
+            try:
+                await worker_task
+            except asyncio.CancelledError:
+                pass
+
+
 # Optional: FastAPI endpoints for health checks
 from fastapi import FastAPI
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/health")
 def health():
     """Health check endpoint"""
     return {"status": "ok", "service": "ai-worker"}
-
-
-@app.on_event("startup")
-async def startup():
-    """Start worker when app starts"""
-    # Run worker in background
-    asyncio.create_task(worker.run())
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Stop worker when app shuts down"""
-    worker.stop()
 
 
 if __name__ == "__main__":
