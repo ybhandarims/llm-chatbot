@@ -1,0 +1,73 @@
+name: Microservices Unit Tests
+
+on:
+  push:
+    paths:
+      - "microservices/**"
+      - "infra/github-actions/microservices-unit-tests.yml"
+  pull_request:
+    paths:
+      - "microservices/**"
+      - "infra/github-actions/microservices-unit-tests.yml"
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  python-unit-tests:
+    name: Python tests - ${{ matrix.service_name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service_name: ai-service
+            service_path: microservices/ai-service
+          - service_name: gateway
+            service_path: microservices/gateway
+          - service_name: conversations-service
+            service_path: microservices/conversations-service
+          - service_name: messages-service
+            service_path: microservices/messages-service
+          - service_name: settings-service
+            service_path: microservices/settings-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ${{ matrix.service_path }}/requirements.txt pytest
+
+      - name: Run unit tests
+        run: pytest ${{ matrix.service_path }}/tests -q
+
+  frontend-unit-tests:
+    name: Frontend tests - microservices/frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: microservices/frontend
+        run: npm install
+
+      - name: Run frontend unit tests
+        working-directory: microservices/frontend
+        run: npm test
