@@ -32,6 +32,8 @@ def main() -> None:
             str(PYTHON),
             "-m",
             "pytest",
+            "-W",
+            "ignore::starlette.exceptions.StarletteDeprecationWarning",
             "--import-mode=importlib",
             *backend_tests,
             "-q",
