@@ -674,6 +674,19 @@ Not the fanciest, not the fastest, but the *right fit* for this project's goals.
 
 ---
 
+## Testing & CI choices (brief)
+
+We selected pragmatic testing and CI patterns to balance fast PR feedback with reliable integration validation:
+
+- **Python tests**: `pytest` for unit and API tests. Integration-style API tests run in-process with FastAPI `TestClient` and an in-memory `FakeTable` so tests don't hit AWS.
+- **Frontend tests**: Node's test runner + JSDOM (`node --test`) for DOM-level checks. Tests inline `public/assets/app.js` or stub `window.fetch` to prevent network calls in CI.
+- **CI strategy**: two workflows — `microservices-unit-tests.yml` (PRs, fast) and `integration-tests.yml` (main, slower integration suites).
+- **Reporting**: Python tests emit JUnit XML (`--junitxml`) and frontend JSON output is converted to JUnit via `microservices/frontend/tools/json-to-junit.js` so GitHub Actions can show test summaries and artifacts.
+
+This approach keeps PR feedback fast while preserving full integration validation on protected branches.
+
+---
+
 **Last Updated**: May 30, 2026  
 **Status**: ✅ FINAL DECISION  
 **Migration Path**: None (this was the chosen path from day 1)

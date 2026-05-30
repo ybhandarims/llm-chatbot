@@ -1,4 +1,4 @@
-# CI Screenshot Guide — how to capture test reports from GitHub Actions
+want to run them locally and share the output# CI Screenshot Guide — how to capture test reports from GitHub Actions
 
 This guide shows exactly what screenshots to take when you want to capture CI test results and artifacts from GitHub Actions. Use these screenshots for documentation, PR comments, or to attach to bug reports.
 

@@ -357,6 +357,23 @@ TOTAL:                              3.5-4.5 hours (depending on setup)
 7. **Monitor**: Setup CloudWatch per Phase 8
 
 ---
+## Testing & CI additions (recent)
+
+We added CI and test artifacts to validate microservices and frontend automatically. Key items:
+
+- Workflows:
+  - `.github/workflows/microservices-unit-tests.yml` — runs fast unit/health tests per Python service and frontend DOM tests on PRs
+  - `.github/workflows/integration-tests.yml` — runs slower integration/API tests on `main`
+- Tests and helpers:
+  - Minimal `test_health.py` for each Python microservice (fast smoke tests)
+  - `conversations-service/tests/test_api.py` — in-process API tests using an in-memory `FakeTable` (no AWS access)
+  - Frontend JSDOM tests: `app.test.js`, `form.test.js`, `smoke.test.js`
+  - `microservices/frontend/tools/json-to-junit.js` converts Node JSON test output to JUnit XML for CI
+- Artifacts:
+  - JUnit XML reports uploaded as workflow artifacts (Python & frontend)
+  - Sample annotated images and PNG exports under `infra/images/` used in CI/docs
+
+See `infra/TESTING_OVERVIEW.md` for local commands and CI troubleshooting steps.
 
 ## Cost Summary
 

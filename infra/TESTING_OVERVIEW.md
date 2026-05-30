@@ -122,6 +122,34 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
 - Add coverage collection to measure test coverage per service.
 
 ---
+## Pytest markers & selective runs
+
+You can tag slower integration tests with pytest markers and run subsets locally or in CI.
+
+- Mark an integration test:
+
+```python
+import pytest
+
+@pytest.mark.integration
+def test_long_running_flow():
+  ...
+```
+
+- Run only integration tests:
+
+```bash
+pytest -m integration
+```
+
+- Run only unit tests (exclude integration):
+
+```bash
+pytest -m "not integration"
+```
+
+This makes it easy to keep PR workflows fast while running full suites on `main`.
+
 ## CI artifacts — a plain-language guide (where to find test reports and what they mean)
 
 If you're not familiar with CI artifacts and JUnit reports, here's a simple, step-by-step explanation in plain language.

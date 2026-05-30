@@ -2872,6 +2872,24 @@ See [infra/cleanup/README.md](./cleanup/README.md) for complete teardown procedu
 
 **Note**: This guide covers issues from all phases (0-10). See specific phase sections for phase-specific troubleshooting.
 
+### CI & Test Failures: Quick Troubleshooting
+
+If a GitHub Actions run shows failing tests or missing artifacts, follow these steps:
+
+1. Open the repository **Actions** tab and select the failing workflow run.
+2. Click the failing job to view the step logs — expand the step that ran `pytest` or `npm test` to see stack traces.
+3. Download uploaded artifacts from the **Artifacts** section (e.g., `python-unit-reports-<service>`, `frontend-test-report`). The JUnit XML files contain test names and failure messages.
+4. Reproduce locally using the exact commands listed in `infra/TESTING_OVERVIEW.md` to get the same environment and logs.
+  - For Python: `pytest path/to/tests --junitxml=reports/<name>.xml`
+  - For frontend: `node --test --reporter=json tests/*.test.js > reports/frontend-tests.json` then convert with `microservices/frontend/tools/json-to-junit.js`.
+5. Common quick fixes:
+  - JSDOM ECONNREFUSED: inline `public/assets/app.js` or stub `window.fetch` in `beforeParse` to avoid network calls.
+  - boto3/DynamoDB errors: ensure tests use the in-memory `FakeTable` or run LocalStack/Moto for integration tests.
+6. Re-run the workflow from the GitHub UI (`Re-run jobs`) or use `gh` CLI: `gh workflow run <workflow.yml>`.
+
+If artifacts are missing, check that the workflow uploaded them (look for `actions/upload-artifact` step); ensure the `path` matches what tests produced.
+
+
 ### Phase 4-5 Issues: EKS & Helm Deployment
 
 ### Problem: Pods stuck in ImagePullBackOff

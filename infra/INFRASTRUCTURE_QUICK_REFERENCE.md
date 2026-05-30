@@ -345,6 +345,31 @@ kubectl get events -n chatbot
 
 ---
 
+## CI & Testing Quick Commands
+
+Run tests locally (Python service example):
+
+```bash
+# Run pytest and write JUnit XML for a single service
+pytest microservices/conversations-service/tests/test_api.py --junitxml=reports/conversations-integration.xml
+```
+
+Frontend (Node) tests to JSON then convert to JUnit:
+
+```bash
+cd microservices/frontend
+node --test --reporter=json tests/*.test.js > reports/frontend-tests.json
+node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml
+```
+
+CI workflows of interest:
+
+- `.github/workflows/microservices-unit-tests.yml` — runs on PRs and pushes under `microservices/**`
+- `.github/workflows/integration-tests.yml` — runs on `main` for slower integration suites
+
+Artifacts uploaded by CI are named like `python-unit-reports-<service>` and `frontend-test-report`.
+
+
 ## Phase 10: Complete Infrastructure Cleanup
 
 **⚠️ WARNING**: These commands DELETE all resources permanently
