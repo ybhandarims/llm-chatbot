@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "npx http-server public -p 3000",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:reports": "mkdir -p reports && node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js"
   },
   "devDependencies": {
     "http-server": "^14.1.1",

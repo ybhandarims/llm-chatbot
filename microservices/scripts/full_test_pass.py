@@ -27,6 +27,7 @@ def main() -> None:
         "microservices/settings-service/tests/test_health.py",
     ]
 
+    # Run Python backend tests and write JUnit XML report
     run(
         [
             str(PYTHON),
@@ -37,11 +38,13 @@ def main() -> None:
             "--import-mode=importlib",
             *backend_tests,
             "-q",
+            "--junitxml=reports/python-units.xml",
         ],
         cwd=REPO_ROOT,
     )
 
-    run([NPM, "test"], cwd=REPO_ROOT / "microservices" / "frontend")
+    # Run frontend tests and write JUnit XML (Node test reporter)
+    run([NPM, "run", "test:reports"], cwd=REPO_ROOT / "microservices" / "frontend")
 
 
 if __name__ == "__main__":
