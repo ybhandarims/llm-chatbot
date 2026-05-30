@@ -83,9 +83,19 @@ jobs:
         run: |
           mkdir -p reports
           node --test --reporter=json tests/*.test.js > reports/frontend-tests.json || true
+          node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml || true
 
       - name: Upload frontend test report
         uses: actions/upload-artifact@v4
         with:
           name: frontend-test-report
-          path: microservices/frontend/reports/frontend-tests.json
+          path: microservices/frontend/reports/frontend-tests.xml
+
+      - name: Publish test reports to Actions (JUnit)
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: frontend-tests
+          path: microservices/frontend/reports/frontend-tests.xml
+          reporter: junit
+          token: ${{ secrets.GITHUB_TOKEN }}

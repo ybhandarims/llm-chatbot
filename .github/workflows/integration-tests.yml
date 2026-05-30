@@ -42,3 +42,12 @@ jobs:
         with:
           name: python-integration-reports-${{ matrix.service_name }}
           path: reports/${{ matrix.service_name }}-integration.xml
+
+      - name: Publish integration JUnit to Actions
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: integration-tests-${{ matrix.service_name }}
+          path: reports/${{ matrix.service_name }}-integration.xml
+          reporter: junit
+          token: ${{ secrets.GITHUB_TOKEN }}
