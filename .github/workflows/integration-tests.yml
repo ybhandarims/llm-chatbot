@@ -20,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -38,16 +38,16 @@ jobs:
           pytest ${{ matrix.service_path }}/tests/test_api.py -q --junitxml=reports/${{ matrix.service_name }}-integration.xml || true
 
       - name: Upload integration test reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-integration-reports-${{ matrix.service_name }}
           path: reports/${{ matrix.service_name }}-integration.xml
 
       - name: Publish integration JUnit to Actions
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: integration-tests-${{ matrix.service_name }}
           path: reports/${{ matrix.service_name }}-integration.xml
-          reporter: junit
+          reporter: java-junit
           token: ${{ secrets.GITHUB_TOKEN }}

@@ -38,10 +38,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -56,7 +56,7 @@ jobs:
           pytest ${{ matrix.service_path }}/tests/test_health.py -q --junitxml=reports/${{ matrix.service_name }}-unit.xml || true
 
       - name: Upload Python unit test reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-unit-reports-${{ matrix.service_name }}
           path: reports/${{ matrix.service_name }}-unit.xml
@@ -67,10 +67,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -86,16 +86,16 @@ jobs:
           node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml || true
 
       - name: Upload frontend test report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-test-report
           path: microservices/frontend/reports/frontend-tests.xml
 
       - name: Publish test reports to Actions (JUnit)
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: frontend-tests
           path: microservices/frontend/reports/frontend-tests.xml
-          reporter: junit
+          reporter: java-junit
           token: ${{ secrets.GITHUB_TOKEN }}
