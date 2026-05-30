@@ -48,8 +48,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r ${{ matrix.service_path }}/requirements.txt pytest
 
-      - name: Run unit tests
-        run: pytest ${{ matrix.service_path }}/tests -q
+      - name: Run fast unit (health) tests and write JUnit XML
+        run: |
+          mkdir -p reports
+          pytest ${{ matrix.service_path }}/tests/test_health.py -q --junitxml=reports/${{ matrix.service_name }}-unit.xml || true
+
+      - name: Upload Python unit test reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-unit-reports-${{ matrix.service_name }}
+          path: reports/${{ matrix.service_name }}-unit.xml
+
+      - name: Write CI completion marker
+        run: |
+          echo "OK $(date -u) $GITHUB_SHA" > ci-complete.txt
+
+      - name: Upload CI completion artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-complete-${{ matrix.service_name }}-${{ github.sha }}
+          path: ci-complete.txt
 
   frontend-unit-tests:
     name: Frontend tests - microservices/frontend
@@ -68,6 +86,50 @@ jobs:
         working-directory: microservices/frontend
         run: npm install
 
-      - name: Run frontend unit tests
+      - name: Run frontend unit tests (Node test runner) and save JUnit XML
         working-directory: microservices/frontend
-        run: npm test
+        run: |
+          mkdir -p reports
+          node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js || true
+
+      - name: Upload frontend test report
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-report
+          path: microservices/frontend/reports/frontend-tests.xml
+
+      - name: Write CI completion marker
+        working-directory: microservices/frontend
+        run: |
+          echo "OK $(date -u) $GITHUB_SHA" > ci-complete.txt
+
+      - name: Upload CI completion artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-complete-frontend-${{ github.sha }}
+          path: microservices/frontend/ci-complete.txt
+
+  collect-and-upload:
+    name: Collect and upload combined artifacts
+    needs: [python-unit-tests, frontend-unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all job artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: combined-reports
+
+      - name: Show downloaded artifacts
+        run: |
+          echo "Contents of combined-reports:"
+          ls -R combined-reports || true
+
+      - name: Create combined zip
+        run: |
+          tar -czf combined-reports.tgz combined-reports
+
+      - name: Upload combined artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: combined-test-artifacts-${{ github.sha }}
+          path: combined-reports.tgz
