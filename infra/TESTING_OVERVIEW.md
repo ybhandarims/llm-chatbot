@@ -7,6 +7,7 @@ This document describes the automated tests currently present in the repository,
 - What it runs:
   - Python tests: runs `pytest` for each Python microservice found in `microservices/<service>/tests` (matrix job named `python-unit-tests`).
   - Frontend tests: runs `npm test` in `microservices/frontend` (job `frontend-unit-tests`).
+- One-command rerun helper: [microservices/scripts/full_test_pass.py](microservices/scripts/full_test_pass.py) mirrors the six-service pass we ran locally.
 
 Triggering: the workflow runs on `push`, `pull_request` (paths limited to `microservices/**` and the workflow file), and can be manually triggered via `workflow_dispatch`.
 
@@ -68,7 +69,13 @@ If you prefer CI to separate very-fast unit tests from slower API/integration te
 
 ## How to run tests locally (copyable commands)
 
-1) Using the repository virtual environment (recommended) — from repo root:
+1) One-command full 6-service pass — from repo root:
+
+```powershell
+& "./.venv/Scripts/python.exe" microservices/scripts/full_test_pass.py
+```
+
+2) Using the repository virtual environment for a single service (recommended) — from repo root:
 
 ```powershell
 # Windows PowerShell (use the venv Python reported by the project)
@@ -76,17 +83,13 @@ If you prefer CI to separate very-fast unit tests from slower API/integration te
 & "./.venv/Scripts/python.exe" -m pytest microservices/conversations-service/tests -q
 ```
 
-2) Run tests for all Python services quickly (one-by-one):
+3) Run tests for all Python services quickly (one-by-one):
 
 ```bash
-python -m pytest microservices/ai-service/tests -q
-python -m pytest microservices/gateway/tests -q
-python -m pytest microservices/conversations-service/tests -q
-python -m pytest microservices/messages-service/tests -q
-python -m pytest microservices/settings-service/tests -q
+python -m pytest --import-mode=importlib microservices/ai-service/tests/test_health.py microservices/gateway/tests/test_health.py microservices/conversations-service/tests/test_health.py microservices/conversations-service/tests/test_api.py microservices/messages-service/tests/test_health.py microservices/settings-service/tests/test_health.py -q
 ```
 
-3) Frontend tests (Node):
+4) Frontend tests (Node):
 
 ```bash
 cd microservices/frontend
@@ -157,7 +160,7 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
 - What happens when CI runs tests:
   - Each workflow job (for example the Python unit job or the frontend job) runs the test commands and writes a small report file describing which tests passed and which failed.
   - For Python we produce JUnit XML files (small XML documents) named like `reports/<service>-unit.xml` or `reports/<service>-integration.xml`.
-  - For the frontend we run Node's test runner to a JSON file and convert that JSON into a JUnit XML file (`reports/frontend-tests.xml`).
+  - For the frontend we run Node's test runner directly with the built-in JUnit reporter, which writes `reports/frontend-tests.xml` without an intermediate JSON conversion step.
 
 - Where CI stores those reports:
   - After a job finishes, the workflow uploads those XML files as "artifacts" attached to the workflow run. You can download them later.
@@ -175,6 +178,12 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
   - If the failure is in the frontend tests, download `frontend-tests.xml` (from the artifact `frontend-test-report`) — it contains the converted results from the Node test run.
 
 - Quick local commands that mirror CI (copy/paste):
+  - Full 6-service pass:
+
+```powershell
+& "./.venv/Scripts/python.exe" microservices/scripts/full_test_pass.py
+```
+
   - Python unit test (writes JUnit XML):
 
 ```bash
@@ -191,14 +200,14 @@ pytest microservices/conversations-service/tests/test_api.py --junitxml=reports/
 
 ```bash
 cd microservices/frontend
-node --test --reporter=json tests/*.test.js > reports/frontend-tests.json
-node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml
+node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js
 ```
 
 - Naming conventions used by our workflows (so you can quickly locate the right artifact):
   - `python-unit-reports-<service>` — uploaded artifact for each Python service's fast unit/health tests.
   - `frontend-test-report` — uploaded artifact that contains the frontend JUnit XML.
   - `python-integration-reports-<service>` — uploaded artifact for integration/API tests run on `main`.
+  - `microservices/scripts/full_test_pass.py` — helper for the exact six-service local rerun.
 
 If you'd like, I can add a short screenshot guide (image) showing where to click in the Actions UI, or add a tiny script that automatically downloads the latest test artifact for a workflow run.
 If you want, I can:
