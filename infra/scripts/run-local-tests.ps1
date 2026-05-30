@@ -40,9 +40,16 @@ try {
     if (-not (Test-Path node_modules)) { npm ci --no-audit --no-fund }
     $jsonOut = Join-Path $artifacts "frontend-tests.json"
     $xmlOut = Join-Path $artifacts "frontend-tests.xml"
-    node --test --reporter=json tests/*.test.js > $jsonOut
-    if ($LASTEXITCODE -ne 0) { $errors += $LASTEXITCODE }
-    node tools/json-to-junit.js $jsonOut $xmlOut
+    if (Test-Path $jsonOut) { Remove-Item $jsonOut -Force }
+    Write-Host "Running: node --test --test-reporter=json tests/*.test.js -> $jsonOut"
+    & node --test --test-reporter=json --test-reporter-destination=$jsonOut tests/*.test.js
+    $nodeExit = $LASTEXITCODE
+    if ($nodeExit -ne 0) { $errors += $nodeExit }
+    if (-not (Test-Path $jsonOut) -or (Get-Item $jsonOut).Length -eq 0) {
+      throw 'frontend JSON report was not generated'
+    }
+    # Convert JSON -> JUnit XML
+    & node tools/json-to-junit.js $jsonOut $xmlOut
     if ($LASTEXITCODE -ne 0) { $errors += $LASTEXITCODE }
 } finally {
     Pop-Location
