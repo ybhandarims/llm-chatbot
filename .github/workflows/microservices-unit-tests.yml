@@ -119,3 +119,28 @@ jobs:
         with:
           name: ci-complete-frontend-${{ github.sha }}
           path: microservices/frontend/ci-complete.txt
+
+  collect-and-upload:
+    name: Collect and upload combined artifacts
+    needs: [python-unit-tests, frontend-unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all job artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: combined-reports
+
+      - name: Show downloaded artifacts
+        run: |
+          echo "Contents of combined-reports:"
+          ls -R combined-reports || true
+
+      - name: Create combined zip
+        run: |
+          tar -czf combined-reports.tgz combined-reports
+
+      - name: Upload combined artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: combined-test-artifacts-${{ github.sha }}
+          path: combined-reports.tgz
