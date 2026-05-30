@@ -244,6 +244,7 @@ settings        ClusterIP      172.20.91.96     <none>                          
 - Kubernetes services - Patched gateway and frontend to LoadBalancer type
 - Kubernetes secrets - Added SQS queue URLs
 - Kubernetes deployments - Restarted all pods for IRSA configuration
+ - [infra/TECHNOLOGY_DECISIONS.md](infra/TECHNOLOGY_DECISIONS.md) - Added rationale for chosen technologies and alternatives
 
 ---
 
