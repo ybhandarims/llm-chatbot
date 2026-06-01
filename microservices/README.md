@@ -34,6 +34,7 @@
 26. [Smoke Test](#smoke-test)
 27. [Troubleshooting](#troubleshooting)
 28. [Production Checklist](#production-checklist)
+29. [Service-Level Guides](#service-level-guides)
 
 ---
 
@@ -53,6 +54,21 @@ This repository is the microservices version of the chat demo. It shows how a re
 - ✅ SQS queue-based job processing (production)
 - ✅ Auto-scaling strategies for microservices
 - ✅ End-to-end smoke tests for verification
+
+---
+
+## Service-Level Guides
+
+Each service now has its own developer checklist in the service folder. These are short, practical READMEs that explain what the service does, why it exists, and the one-line commands to run it, test it, lint it, and build its image.
+
+- [Gateway](gateway/README.md) - the traffic router and API entry point
+- [Conversations Service](conversations-service/README.md) - conversation history and metadata
+- [Messages Service](messages-service/README.md) - stores user and assistant messages
+- [Settings Service](settings-service/README.md) - system prompt and user preferences
+- [AI Service](ai-service/README.md) - model / worker logic for answer generation
+- [Frontend](frontend/README.md) - browser UI and smoke tests
+
+Layman version: instead of reading one giant document, each folder now explains itself so a developer can open the right service, understand it quickly, and copy the commands they need.
 
 ---
 
