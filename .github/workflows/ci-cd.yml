@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -39,6 +39,13 @@ jobs:
       - name: Install pytest
         run: python -m pip install --upgrade pip pytest
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'microservices/frontend/package-lock.json'
+
       - name: Install frontend dependencies
         working-directory: microservices/frontend
         run: npm ci
@@ -48,16 +55,9 @@ jobs:
           set -euo pipefail
           python microservices/scripts/full_test_pass.py
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'microservices/frontend/package-lock.json'
-
       - name: Upload JUnit test reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: junit-test-reports
           path: |
