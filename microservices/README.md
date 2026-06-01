@@ -306,6 +306,54 @@ sequenceDiagram
 	GW->>CON: Append message to history
 	GW->>SET: Read system prompt
 	GW->>CON: Fetch recent conversation history
+
+---
+
+## CI / CD & Tests (What changed)
+
+We added an automated CI/CD pipeline using GitHub Actions at `.github/workflows/ci-cd.yml`.
+
+What it does (simple):
+
+- **Runs tests**: For Python microservices it runs `pytest` for any tests under `microservices/*/tests`. For the frontend it runs `npm test` in `microservices/frontend`.
+- **Builds Docker images**: Builds each microservice into a Docker image.
+- **Pushes images to ECR**: Uploads built images to your AWS ECR registry.
+- **Deploys with Helm**: Runs `helm upgrade --install` against the `infra/helm/chatapp` chart.
+
+Why this matters (layman):
+
+- Saves time — changes are automatically tested and deployed.
+- Reduces mistakes — tests run before deployment.
+- Makes rollbacks and deployments repeatable.
+
+How to run tests locally:
+
+```bash
+# From repo root — run all Python service tests
+pytest microservices/*/tests -q
+
+# Run frontend tests
+cd microservices/frontend
+npm ci
+npm test
+```
+
+How to run build+deploy locally (manual equivalent of CI):
+
+```bash
+# Build an example service image
+docker build -t myaccount/llm-chatbot/gateway:local -f microservices/gateway/Dockerfile microservices/gateway
+
+# Push to registry (example for ECR; set $ECR_REGISTRY first)
+docker tag myaccount/llm-chatbot/gateway:local $ECR_REGISTRY/llm-chatbot/gateway:local
+docker push $ECR_REGISTRY/llm-chatbot/gateway:local
+
+# Deploy helm chart overriding the image
+helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace \
+	--set images.gateway.repository=$ECR_REGISTRY/llm-chatbot/gateway --set images.gateway.tag=local
+```
+
+If you'd like, I can add per-service `README.md` files with a quick developer checklist (run tests, lint, build image), or add CI caching and test report uploads to the workflow. Which would you prefer next?
 	
 	GW->>AI: POST /generate<br/>{prompt, history, message}<br/>WAIT HERE...
 	

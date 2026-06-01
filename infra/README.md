@@ -352,6 +352,51 @@ For detailed rollback procedures, see [INFRASTRUCTURE_RUNBOOK.md#Rollback](INFRA
 
 ---
 
+## CI/CD (GitHub Actions)
+
+We've added a GitHub Actions workflow to automate tests, image builds, and deployments. The workflow is at `.github/workflows/ci-cd.yml` and follows this simple sequence:
+
+- **Run tests**: unit and integration tests for Python services (`pytest`) and frontend tests (`npm test`).
+- **Build images**: Docker builds for each microservice under `microservices/`.
+- **Push images**: images are pushed to Amazon ECR under `${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/llm-chatbot/`.
+- **Deploy**: calls `helm upgrade --install` to deploy the `infra/helm/chatapp` chart with the newly built image tags.
+
+Layman's explanation: the workflow first checks the code works (tests), then packages each service into containers (images), uploads those images to your AWS registry, and updates the running app on the Kubernetes cluster so users see the new version.
+
+Required GitHub Secrets (set these in your repository Settings → Secrets):
+
+- `AWS_ACCESS_KEY_ID` — AWS key with permissions to push to ECR and update EKS kubeconfig
+- `AWS_SECRET_ACCESS_KEY` — AWS secret
+- `AWS_ACCOUNT_ID` — numeric AWS account id used to form the ECR registry URL
+
+Workflow environment defaults (edit `.github/workflows/ci-cd.yml` if needed):
+
+- `AWS_REGION` — default `us-east-1`
+- `EKS_CLUSTER_NAME` — default `chatapp-eks`
+
+Local commands (what CI runs) — run these to emulate the workflow locally:
+
+```bash
+# Run tests for Python services
+pytest microservices/gateway/tests
+
+# Run frontend tests
+cd microservices/frontend && npm ci && npm test
+
+# Build and push a single image (example)
+ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+docker build -t $ECR_REGISTRY/llm-chatbot/gateway:local -f microservices/gateway/Dockerfile microservices/gateway
+docker push $ECR_REGISTRY/llm-chatbot/gateway:local
+
+# Deploy via Helm (override images or set values in infra/helm/chatapp/values.yaml)
+helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace \
+  --set images.gateway.repository=$ECR_REGISTRY/llm-chatbot/gateway --set images.gateway.tag=local
+```
+
+If you'd like, I can also add: cached dependencies, JUnit test reports, or a matrix to run tests in parallel to speed up the workflow.
+
+---
+
 ## Support
 
 - **Runbook**: Full step-by-step guide with examples
