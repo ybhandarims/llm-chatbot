@@ -39,6 +39,18 @@ jobs:
       - name: Install pytest
         run: python -m pip install --upgrade pip pytest
 
+      - name: Install backend dependencies
+        run: |
+          set -euo pipefail
+          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service")
+          for svc in "${PY_SERVICES[@]}"; do
+            svc_path="microservices/$svc"
+            if [ -f "$svc_path/requirements.txt" ]; then
+              echo "Installing requirements for $svc"
+              python -m pip install -r "$svc_path/requirements.txt"
+            fi
+          done
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
