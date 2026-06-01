@@ -369,6 +369,13 @@ CI workflows of interest:
 
 Artifacts uploaded by CI are named like `python-unit-reports-<service>`, `python-unit-coverage-<service>`, `python-integration-reports-<service>`, `python-integration-coverage-<service>`, and `frontend-test-report`.
 
+Coverage reports are split into two forms:
+
+- XML: `reports/<service>-coverage.xml` for automated tooling and CI systems.
+- HTML: `reports/<service>-htmlcov/` for human review in a browser.
+
+Open the artifact download from the Actions run, extract it, and open `index.html` inside the HTML coverage folder to review results.
+
 
 ## Phase 10: Complete Infrastructure Cleanup
 

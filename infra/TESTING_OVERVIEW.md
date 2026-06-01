@@ -164,6 +164,11 @@ This makes it easy to keep PR workflows fast while running full suites on `main`
 
 If you're not familiar with CI artifacts and JUnit reports, here's a simple, step-by-step explanation in plain language.
 
+- What a coverage report is:
+  - A coverage report shows how much of the code was exercised by the tests that ran in GitHub Actions.
+  - The XML report is machine-readable (`reports/<service>-coverage.xml`) and the HTML report is easier to inspect in a browser (`reports/<service>-htmlcov/`).
+  - Higher coverage means more lines of code were touched by tests, but it does not automatically mean the code is fully correct.
+
 - What happens when CI runs tests:
   - Each workflow job (for example the Python unit job or the frontend job) runs the test commands and writes a small report file describing which tests passed and which failed.
   - For Python we produce JUnit XML files (small XML documents) named like `reports/<service>-unit.xml` or `reports/<service>-integration.xml`.
@@ -180,6 +185,7 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
  3. Select a specific run from the list (the runs are ordered by time, newest first).
  4. On the right-hand side of the run page you will see an **Artifacts** section. Click the artifact name (for example `python-unit-reports-ai-service` or `python-unit-coverage-ai-service`) to download the report files.
  5. Also check the **Tests** tab (if present) on the run page — the test reporter action we added will show a friendly summary of test suites and failures there.
+ 6. Open the downloaded HTML coverage folder locally and open the `index.html` file to inspect file-by-file coverage.
 
 - Common troubleshooting actions (what to do when a test fails):
   - Click the failing job in the workflow run to view the step logs — logs show stack traces and the exact failing assertion.
