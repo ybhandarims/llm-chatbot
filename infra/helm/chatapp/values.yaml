@@ -4,23 +4,25 @@ imagePullPolicy: Always
 
 # ECR Image registries (Update with your AWS account ID and region)
 images:
+  # CI sets `REPO_PREFIX` and will override these with `--set` during deploy.
+  # Keep simple placeholders to avoid accidental pushes from local dev.
   frontend:
-    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/frontend"
+    repository: "REPO_PREFIX/frontend"
     tag: "latest"
   gateway:
-    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/gateway"
+    repository: "REPO_PREFIX/gateway"
     tag: "latest"
   settings:
-    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/settings"
+    repository: "REPO_PREFIX/settings"
     tag: "latest"
   conversations:
-    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/conversations"
+    repository: "REPO_PREFIX/conversations"
     tag: "latest"
   messages:
-    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/messages"
+    repository: "REPO_PREFIX/messages"
     tag: "latest"
   ai:
-    repository: "396608772637.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/ai-worker"
+    repository: "REPO_PREFIX/ai-worker"
     tag: "latest"
 
 # Service configuration

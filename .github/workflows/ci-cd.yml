@@ -1,0 +1,70 @@
+name: CI/CD — Build, Push, Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      EKS_CLUSTER_NAME: chatapp-eks
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push images
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          echo "ECR_REGISTRY=$ECR_REGISTRY"
+
+          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "frontend")
+          for svc in "${SERVICES[@]}"; do
+            case $svc in
+              ai-service) imagename="ai-worker" ;;
+              conversations-service) imagename="conversations" ;;
+              messages-service) imagename="messages" ;;
+              settings-service) imagename="settings" ;;
+              gateway) imagename="gateway" ;;
+              frontend) imagename="frontend" ;;
+            esac
+            echo "Building $svc -> $ECR_REGISTRY/llm-chatbot/$imagename:${GITHUB_SHA}"
+            docker build -t $ECR_REGISTRY/llm-chatbot/$imagename:${GITHUB_SHA} ./microservices/$svc
+            docker push $ECR_REGISTRY/llm-chatbot/$imagename:${GITHUB_SHA}
+          done
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Helm chart
+        run: |
+          set -euo pipefail
+          export ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          TAG=${GITHUB_SHA}
+
+          # Build --set arguments for all services
+          set_args=(
+            "--set images.frontend.repository=${ECR_REGISTRY}/llm-chatbot/frontend" "--set images.frontend.tag=${TAG}"
+            "--set images.gateway.repository=${ECR_REGISTRY}/llm-chatbot/gateway" "--set images.gateway.tag=${TAG}"
+            "--set images.settings.repository=${ECR_REGISTRY}/llm-chatbot/settings" "--set images.settings.tag=${TAG}"
+            "--set images.conversations.repository=${ECR_REGISTRY}/llm-chatbot/conversations" "--set images.conversations.tag=${TAG}"
+            "--set images.messages.repository=${ECR_REGISTRY}/llm-chatbot/messages" "--set images.messages.tag=${TAG}"
+            "--set images.ai.repository=${ECR_REGISTRY}/llm-chatbot/ai-worker" "--set images.ai.tag=${TAG}"
+          )
+
+          helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace "${set_args[@]}"
