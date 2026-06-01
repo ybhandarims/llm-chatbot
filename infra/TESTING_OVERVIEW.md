@@ -3,7 +3,8 @@
 This document describes the automated tests currently present in the repository, what each test checks, where the tests live, the results observed locally, and how to run them locally and in CI.
 
 ## CI workflow
-- Workflow file: [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml)
+- Workflow files: [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml) and [infra/github-actions/microservices-unit-tests.yml](infra/github-actions/microservices-unit-tests.yml)
+- Integration workflow files: [.github/workflows/integration-tests.yml](.github/workflows/integration-tests.yml) and [infra/github-actions/integration-tests.yml](infra/github-actions/integration-tests.yml)
 - What it runs:
   - Python tests: runs `pytest` for each Python microservice found in `microservices/<service>/tests` (matrix job named `python-unit-tests`).
   - Frontend tests: runs `npm test` in `microservices/frontend` (job `frontend-unit-tests`).
@@ -166,16 +167,18 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
 - What happens when CI runs tests:
   - Each workflow job (for example the Python unit job or the frontend job) runs the test commands and writes a small report file describing which tests passed and which failed.
   - For Python we produce JUnit XML files (small XML documents) named like `reports/<service>-unit.xml` or `reports/<service>-integration.xml`.
+  - Python jobs also produce coverage outputs named like `reports/<service>-coverage.xml` and `reports/<service>-htmlcov/`.
   - For the frontend we run Node's test runner directly with the built-in JUnit reporter, which writes `reports/frontend-tests.xml` without an intermediate JSON conversion step.
 
 - Where CI stores those reports:
   - After a job finishes, the workflow uploads those XML files as "artifacts" attached to the workflow run. You can download them later.
+  - Coverage artifacts are uploaded separately as `python-unit-coverage-<service>` and `python-integration-coverage-<service>`.
 
 - How to find the reports in GitHub (step-by-step):
   1. Open the repository in GitHub and click the **Actions** tab.
  2. Pick the workflow you want (for example "Microservices Unit Tests" or "Integration Tests").
  3. Select a specific run from the list (the runs are ordered by time, newest first).
- 4. On the right-hand side of the run page you will see an **Artifacts** section. Click the artifact name (for example `python-unit-reports-ai-service`) to download the XML file.
+ 4. On the right-hand side of the run page you will see an **Artifacts** section. Click the artifact name (for example `python-unit-reports-ai-service` or `python-unit-coverage-ai-service`) to download the report files.
  5. Also check the **Tests** tab (if present) on the run page — the test reporter action we added will show a friendly summary of test suites and failures there.
 
 - Common troubleshooting actions (what to do when a test fails):
@@ -211,8 +214,10 @@ node --test --test-reporter=junit --test-reporter-destination=reports/frontend-t
 
 - Naming conventions used by our workflows (so you can quickly locate the right artifact):
   - `python-unit-reports-<service>` — uploaded artifact for each Python service's fast unit/health tests.
+  - `python-unit-coverage-<service>` — uploaded coverage artifact for each Python service's fast unit/health tests.
   - `frontend-test-report` — uploaded artifact that contains the frontend JUnit XML.
   - `python-integration-reports-<service>` — uploaded artifact for integration/API tests run on `main`.
+  - `python-integration-coverage-<service>` — uploaded coverage artifact for integration/API tests run on `main`.
   - `microservices/scripts/full_test_pass.py` — helper for the exact six-service local rerun.
 
 If you'd like, I can add a short screenshot guide (image) showing where to click in the Actions UI, or add a tiny script that automatically downloads the latest test artifact for a workflow run.

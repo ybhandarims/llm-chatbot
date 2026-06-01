@@ -364,10 +364,10 @@ node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.x
 
 CI workflows of interest:
 
-- `.github/workflows/microservices-unit-tests.yml` — runs on PRs and pushes under `microservices/**`
-- `.github/workflows/integration-tests.yml` — runs on `main` for slower integration suites
+- `.github/workflows/microservices-unit-tests.yml` and `infra/github-actions/microservices-unit-tests.yml` — synced copies that run on PRs and pushes under `microservices/**`
+- `.github/workflows/integration-tests.yml` and `infra/github-actions/integration-tests.yml` — synced copies that run on `main` for slower integration suites
 
-Artifacts uploaded by CI are named like `python-unit-reports-<service>` and `frontend-test-report`.
+Artifacts uploaded by CI are named like `python-unit-reports-<service>`, `python-unit-coverage-<service>`, `python-integration-reports-<service>`, `python-integration-coverage-<service>`, and `frontend-test-report`.
 
 
 ## Phase 10: Complete Infrastructure Cleanup
