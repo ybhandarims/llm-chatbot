@@ -4,6 +4,20 @@ on:
   push:
     branches:
       - main
+      - release/**
+    paths:
+      - 'microservices/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+      - release/**
+    paths:
+      - 'microservices/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
 
 jobs:
   run-tests:
@@ -11,10 +25,10 @@ jobs:
     name: Run unit & integration tests
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -25,21 +39,14 @@ jobs:
       - name: Install pytest
         run: python -m pip install --upgrade pip pytest
 
-      - name: Run Python service tests
+      - name: Install frontend dependencies
+        working-directory: microservices/frontend
+        run: npm ci
+
+      - name: Run unit & integration tests
         run: |
           set -euo pipefail
-          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service")
-          for svc in "${PY_SERVICES[@]}"; do
-            svc_path="microservices/$svc"
-            if [ -f "$svc_path/requirements.txt" ]; then
-              echo "Installing requirements for $svc"
-              python -m pip install -r "$svc_path/requirements.txt"
-            fi
-            if [ -d "$svc_path/tests" ]; then
-              echo "Running pytest for $svc"
-              pytest -q "$svc_path/tests" --junitxml="reports/${svc}.xml"
-            fi
-          done
+          python microservices/scripts/full_test_pass.py
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -48,20 +55,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'microservices/frontend/package-lock.json'
 
-      - name: Run frontend tests
-        run: |
-          set -euo pipefail
-          if [ -f "microservices/frontend/package.json" ]; then
-            cd microservices/frontend
-            npm ci
-            npm run test:reports
-          else
-            echo "No frontend package.json found, skipping JS tests"
-          fi
-
       - name: Upload JUnit test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: junit-test-reports
           path: |
@@ -77,7 +73,7 @@ jobs:
       EKS_CLUSTER_NAME: chatapp-eks
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2

@@ -3,26 +3,26 @@
 This document describes the automated tests currently present in the repository, what each test checks, where the tests live, the results observed locally, and how to run them locally and in CI.
 
 ## CI workflow
-- Workflow files: [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml) and [infra/github-actions/microservices-unit-tests.yml](infra/github-actions/microservices-unit-tests.yml)
-- Integration workflow files: [.github/workflows/integration-tests.yml](.github/workflows/integration-tests.yml) and [infra/github-actions/integration-tests.yml](infra/github-actions/integration-tests.yml)
-- What it runs:
-  - Python tests: runs `pytest` for each Python microservice found in `microservices/<service>/tests` (matrix job named `python-unit-tests`).
-  - Frontend tests: runs `npm test` in `microservices/frontend` (job `frontend-unit-tests`).
-- One-command rerun helper: [microservices/scripts/full_test_pass.py](microservices/scripts/full_test_pass.py) mirrors the six-service pass we ran locally.
+ - Workflow file: [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
+ - What it runs:
+   - Python tests: uses [microservices/scripts/full_test_pass.py](microservices/scripts/full_test_pass.py), which runs the six-service backend test pass from the repo root.
+   - Frontend tests: runs the Node test reporter in `microservices/frontend` and writes JUnit XML for the workflow artifact.
+ - Triggering: the workflow runs on `push` and `pull_request` to `main` or `release/**`, and it can be started manually with `workflow_dispatch`.
+ - Path filters: only runs when `microservices/**`, `infra/**`, or `.github/workflows/**` change.
 
-Triggering: the workflow runs on `push`, `pull_request` (paths limited to `microservices/**` and the workflow file), and can be manually triggered via `workflow_dispatch`.
+Plain-language summary: this workflow is the main “check the code, build the app, then deploy it” pipeline. A push or PR starts the checks automatically, and a manual trigger lets you rerun the same pipeline when you need to debug GitHub Actions.
 
 ## Plain-language summary (what we changed and what runs in CI)
 
 - What we added recently:
-  - a GitHub Actions workflow under `.github/workflows/microservices-unit-tests.yml` to run tests for each microservice;
+  - a GitHub Actions workflow under `.github/workflows/ci-cd.yml` to run the repo-wide test pass, build images, push to ECR, and deploy with Helm;
   - minimal unit/health tests for each Python microservice so CI fails fast on broken imports or missing endpoints;
   - an API-level test for the `conversations-service` that exercises create/get/append/list/delete flows using an in-memory fake DynamoDB table;
   - a frontend DOM-level test (JSDOM) that simulates the browser, submits the chat form, and asserts the UI updates.
 
 - In very simple terms — which tests run where:
-  - GitHub Actions (CI) runs the same commands we run locally: it executes `pytest` for each Python service (so it runs both the tiny health/unit tests and any API tests placed under `microservices/<service>/tests`), and it runs `npm test` in `microservices/frontend` (so it executes the JSDOM frontend tests).
-  - So: the CI job named `python-unit-tests` will run *unit* and *API* tests that live under each service `tests` folder. The `frontend-unit-tests` job runs the *frontend DOM/UI* tests.
+  - GitHub Actions (CI) now runs the same backend sequence we use locally through `microservices/scripts/full_test_pass.py`, then runs the frontend test reporter in `microservices/frontend`.
+  - So: the CI job first checks the Python services, then checks the browser-side frontend behavior, and only after that does the build-and-deploy job continue.
 
 If you prefer CI to separate very-fast unit tests from slower API/integration tests, I can split those into separate jobs (units on PRs, integrations on main).
 
@@ -55,12 +55,12 @@ If you prefer CI to separate very-fast unit tests from slower API/integration te
 ## Which tests run where (short)
 
 - Local commands you ran:
-  - Python tests: `python -m pytest microservices/<service>/tests -q` (or via project's venv python)
+  - Python tests: `python microservices/scripts/full_test_pass.py` for the repo-wide pass, or `python -m pytest microservices/<service>/tests -q` for a single service
   - Frontend tests: `cd microservices/frontend && npm test` (runs Node's `node --test tests/*.test.js`)
 
 - CI (GitHub Actions) runs the same commands in the workflow:
-  - Python: `pip install -r <service>/requirements.txt pytest` then `pytest <service>/tests -q`
-  - Frontend: `npm install` then `npm test` in `microservices/frontend`
+  - Python: `python microservices/scripts/full_test_pass.py`
+  - Frontend: `npm ci` then the Node JUnit reporter in `microservices/frontend`
 
 ## Classification: unit vs integration vs UI
 
@@ -102,7 +102,7 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
 
 ## CI behavior and tips
 
-- The workflow file is [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml). When you push changes under `microservices/**`, GitHub Actions will run the workflow and execute the same test commands described above.
+- The workflow file is [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml). When you push changes under `microservices/**`, `infra/**`, or `.github/workflows/**`, GitHub Actions will run the workflow and execute the same test commands described above.
 - If some tests are slow or require external resources (real DynamoDB, external APIs), either:
   - Mock those dependencies (preferred), or
   - Move slow/integration tests to a separate workflow that runs on `main` only, not on every PR.
@@ -121,7 +121,8 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
 - DynamoDB/boto3 errors in tests: mock the `table` object or use localstack/moto. The conversations-service API test uses an in-memory `FakeTable` to avoid real AWS calls.
 
 ## Where to look / files changed by recent work
-- CI workflow: [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml)
+- CI workflow: [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
+- Test-only workflows: [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml) and [.github/workflows/integration-tests.yml](.github/workflows/integration-tests.yml)
 - Conversations API tests: [microservices/conversations-service/tests/test_api.py](microservices/conversations-service/tests/test_api.py)
 - Python health tests: see each service under `microservices/*/tests/test_health.py` (AI/gateway/conversations/messages/settings)
 - Frontend tests: [microservices/frontend/tests/app.test.js](microservices/frontend/tests/app.test.js), [microservices/frontend/tests/form.test.js](microservices/frontend/tests/form.test.js), [microservices/frontend/tests/smoke.test.js](microservices/frontend/tests/smoke.test.js)

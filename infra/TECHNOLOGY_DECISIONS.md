@@ -681,7 +681,8 @@ We selected pragmatic testing and CI patterns to balance fast PR feedback with r
 - **Python tests**: `pytest` for unit and API tests. Integration-style API tests run in-process with FastAPI `TestClient` and an in-memory `FakeTable` so tests don't hit AWS.
 - **Frontend tests**: Node's test runner + JSDOM (`node --test`) for DOM-level checks. Tests inline `public/assets/app.js` or stub `window.fetch` to prevent network calls in CI.
 - **CI strategy**: two synced workflow pairs — `microservices-unit-tests.yml` (PRs, fast) and `integration-tests.yml` (main, slower integration suites), each mirrored under `infra/github-actions/`.
-- **Reporting**: Python tests emit JUnit XML (`--junitxml`) plus coverage XML/HTML via `pytest-cov`, and frontend JSON output is converted to JUnit via `microservices/frontend/tools/json-to-junit.js` so GitHub Actions can show test summaries and artifacts.
+- **Release workflow**: the top-level `.github/workflows/ci-cd.yml` workflow handles the full release path. It runs on `push`, `pull_request`, and `workflow_dispatch`, with path filters so it only starts for relevant backend, frontend, or infra changes.
+- **Reporting**: Python tests emit JUnit XML (`--junitxml`) plus coverage XML/HTML via `pytest-cov`, and the frontend uses Node's built-in JUnit test reporter so GitHub Actions can show test summaries and artifacts without a JSON conversion step.
 
 This approach keeps PR feedback fast while preserving full integration validation on protected branches.
 

@@ -358,12 +358,25 @@ For detailed rollback procedures, see [INFRASTRUCTURE_RUNBOOK.md#Rollback](INFRA
 
 We've added a GitHub Actions workflow to automate tests, image builds, and deployments. The workflow is at `.github/workflows/ci-cd.yml` and follows this simple sequence:
 
-- **Run tests**: unit and integration tests for Python services (`pytest`) and frontend tests (`npm test`).
+- **Run tests**: a repo-wide test pass for Python services plus frontend tests. The workflow uses `microservices/scripts/full_test_pass.py` so CI runs the same backend sequence we validated locally.
 - **Build images**: Docker builds for each microservice under `microservices/`.
 - **Push images**: images are pushed to Amazon ECR under `${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/llm-chatbot/`.
 - **Deploy**: calls `helm upgrade --install` to deploy the `infra/helm/chatapp` chart with the newly built image tags.
 
-Layman's explanation: the workflow first checks the code works (tests), then packages each service into containers (images), uploads those images to your AWS registry, and updates the running app on the Kubernetes cluster so users see the new version.
+Layman's explanation: the workflow first checks the code works, then packages each service into containers, uploads those images to your AWS registry, and updates the running app on the Kubernetes cluster so users see the new version.
+
+Triggering details:
+
+- `push` to `main` or `release/**`
+- `pull_request` targeting `main` or `release/**`
+- manual runs via `workflow_dispatch`
+- path filters limit runs to `microservices/**`, `infra/**`, and `.github/workflows/**`
+
+Why this matters:
+
+- PRs get feedback before merge.
+- Release branches get the same checks as main.
+- Manual dispatch lets you rerun the pipeline without pushing a new commit.
 
 Required GitHub Secrets (set these in your repository Settings → Secrets):
 
@@ -379,11 +392,14 @@ Workflow environment defaults (edit `.github/workflows/ci-cd.yml` if needed):
 Local commands (what CI runs) — run these to emulate the workflow locally:
 
 ```bash
-# Run tests for Python services
+# Run the same full test pass CI uses
+python microservices/scripts/full_test_pass.py
+
+# Or run a single service if you only want a quick check
 pytest microservices/gateway/tests
 
 # Run frontend tests
-cd microservices/frontend && npm ci && npm test
+cd microservices/frontend && npm ci && npm run test:reports
 
 # Build and push a single image (example)
 ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"

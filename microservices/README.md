@@ -331,10 +331,17 @@ We added an automated CI/CD pipeline using GitHub Actions at `.github/workflows/
 
 What it does (simple):
 
-- **Runs tests**: For Python microservices it runs `pytest` for any tests under `microservices/*/tests`. For the frontend it runs `npm test` in `microservices/frontend`.
+- **Runs tests**: It uses `microservices/scripts/full_test_pass.py` so CI runs the same Python backend pass we validated locally, then runs frontend tests in `microservices/frontend`.
 - **Builds Docker images**: Builds each microservice into a Docker image.
 - **Pushes images to ECR**: Uploads built images to your AWS ECR registry.
 - **Deploys with Helm**: Runs `helm upgrade --install` against the `infra/helm/chatapp` chart.
+
+When it runs:
+
+- `push` to `main` or `release/**`
+- `pull_request` targeting `main` or `release/**`
+- manual runs through `workflow_dispatch`
+- only when files under `microservices/**`, `infra/**`, or `.github/workflows/**` change
 
 Why this matters (layman):
 
@@ -342,16 +349,18 @@ Why this matters (layman):
 - Reduces mistakes — tests run before deployment.
 - Makes rollbacks and deployments repeatable.
 
+In plain English: the pipeline checks the code first, packages each service into an image, uploads the image to AWS, and then tells Kubernetes to use the new version.
+
 How to run tests locally:
 
 ```bash
 # From repo root — run all Python service tests
-pytest microservices/*/tests -q
+python microservices/scripts/full_test_pass.py
 
 # Run frontend tests
 cd microservices/frontend
 npm ci
-npm test
+npm run test:reports
 ```
 
 How to run build+deploy locally (manual equivalent of CI):
