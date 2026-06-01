@@ -4,6 +4,8 @@
 
 **⚡ Quick Reference**: [INFRASTRUCTURE_QUICK_REFERENCE.md](INFRASTRUCTURE_QUICK_REFERENCE.md) - Common commands and quick lookups
 
+**🧭 Roadmap**: [ROADMAP.md](ROADMAP.md) - Formal phased implementation plan with plain-language explanations
+
 ---
 
 ## Overview
