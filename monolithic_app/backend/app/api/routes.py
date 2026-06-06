@@ -36,7 +36,9 @@ def health() -> HealthResponse:
 
 @router.get("/conversations", response_model=list[ConversationSummary])
 def list_conversations() -> list[ConversationSummary]:
-    return [ConversationSummary(**item) for item in _chat_repository.list_conversations()]
+    return [
+        ConversationSummary(**item) for item in _chat_repository.list_conversations()
+    ]
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetail)

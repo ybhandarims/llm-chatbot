@@ -22,7 +22,9 @@ class ChatService:
         prompt = self.settings_repository.get_value("system_prompt")
         if prompt:
             return prompt
-        self.settings_repository.upsert_value("system_prompt", settings.system_prompt_default)
+        self.settings_repository.upsert_value(
+            "system_prompt", settings.system_prompt_default
+        )
         return settings.system_prompt_default
 
     def update_system_prompt(self, system_prompt: str) -> str:

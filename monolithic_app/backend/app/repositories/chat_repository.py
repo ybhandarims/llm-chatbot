@@ -9,10 +9,8 @@ from app.core.database import get_connection
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
-
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime(ISO_FORMAT)
-
 
 
 def _to_dt(value: str) -> datetime:
@@ -91,7 +89,9 @@ class ChatRepository:
             for row in rows
         ]
 
-    def add_message(self, conversation_id: int, role: str, content: str) -> dict[str, Any]:
+    def add_message(
+        self, conversation_id: int, role: str, content: str
+    ) -> dict[str, Any]:
         now = _now_iso()
         with get_connection() as conn:
             cursor = conn.execute(

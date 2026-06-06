@@ -18,7 +18,9 @@ def test_health(client: TestClient) -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_prompt_and_chat_flow(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prompt_and_chat_flow(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Use mock mode to avoid external dependency in tests.
     monkeypatch.setenv("OPENAI_MOCK", "true")
 

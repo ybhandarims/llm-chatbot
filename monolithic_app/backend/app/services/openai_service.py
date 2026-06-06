@@ -22,7 +22,9 @@ class OpenAIService:
             self._client = OpenAI(api_key=settings.openai_api_key)
 
         if self._client is None:
-            raise RuntimeError("OPENAI_API_KEY is missing. Set it in environment or .env.")
+            raise RuntimeError(
+                "OPENAI_API_KEY is missing. Set it in environment or .env."
+            )
 
         response = self._client.responses.create(
             model=settings.openai_model,

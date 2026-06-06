@@ -8,7 +8,6 @@ from app.core.database import get_connection
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
-
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime(ISO_FORMAT)
 

@@ -23,7 +23,7 @@ DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "settings")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
 # DynamoDB client
-dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 table = dynamodb.Table(DYNAMODB_TABLE)
 
 
@@ -55,26 +55,25 @@ def get_settings():
     """Get user settings"""
     try:
         user_id = "default_user"  # In production, extract from JWT
-        
+
         response = table.get_item(
-            Key={
-                "user_id": user_id,
-                "setting_key": "preferences"
-            }
+            Key={"user_id": user_id, "setting_key": "preferences"}
         )
-        
+
         if "Item" not in response:
             # Return default settings
             return DEFAULT_SETTINGS
-        
+
         item = response["Item"]
         settings = {
-            "system_prompt": item.get("system_prompt", DEFAULT_SETTINGS["system_prompt"]),
+            "system_prompt": item.get(
+                "system_prompt", DEFAULT_SETTINGS["system_prompt"]
+            ),
             "model": item.get("model", DEFAULT_SETTINGS["model"]),
             "temperature": item.get("temperature", DEFAULT_SETTINGS["temperature"]),
             "max_tokens": item.get("max_tokens", DEFAULT_SETTINGS["max_tokens"]),
         }
-        
+
         return settings
     except Exception as e:
         logger.error(f"Error getting settings: {e}")
@@ -88,26 +87,30 @@ def update_settings(payload: SettingsUpdate):
     try:
         user_id = "default_user"  # In production, extract from JWT
         timestamp = datetime.now(timezone.utc).isoformat()
-        
+
         # Get current settings
         current_settings = get_settings()
-        
+
         # Update with provided values
         updates = {k: v for k, v in payload.dict().items() if v is not None}
-        
+
         item = {
             "user_id": user_id,
             "setting_key": "preferences",
-            "system_prompt": updates.get("system_prompt", current_settings.get("system_prompt")),
+            "system_prompt": updates.get(
+                "system_prompt", current_settings.get("system_prompt")
+            ),
             "model": updates.get("model", current_settings.get("model")),
-            "temperature": updates.get("temperature", current_settings.get("temperature")),
+            "temperature": updates.get(
+                "temperature", current_settings.get("temperature")
+            ),
             "max_tokens": updates.get("max_tokens", current_settings.get("max_tokens")),
             "updated_at": timestamp,
         }
-        
+
         table.put_item(Item=item)
         logger.info(f"Settings updated for user {user_id}")
-        
+
         return {
             "status": "updated",
             "settings": {
@@ -129,17 +132,17 @@ def reset_settings():
     try:
         user_id = "default_user"  # In production, extract from JWT
         timestamp = datetime.now(timezone.utc).isoformat()
-        
+
         item = {
             "user_id": user_id,
             "setting_key": "preferences",
             **DEFAULT_SETTINGS,
             "updated_at": timestamp,
         }
-        
+
         table.put_item(Item=item)
         logger.info(f"Settings reset for user {user_id}")
-        
+
         return {
             "status": "reset",
             "settings": DEFAULT_SETTINGS,
@@ -160,7 +163,7 @@ def get_model_options():
             "gpt-4-turbo",
             "claude-3-opus",
             "claude-3-sonnet",
-            "local-mock"
+            "local-mock",
         ],
         "temperature_range": [0.0, 2.0],
         "max_tokens_range": [1, 4096],

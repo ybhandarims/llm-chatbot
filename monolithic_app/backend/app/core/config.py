@@ -18,7 +18,6 @@ class Settings:
     database_path: str
 
 
-
 def _as_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default

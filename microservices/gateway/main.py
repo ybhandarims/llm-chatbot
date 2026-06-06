@@ -30,11 +30,13 @@ SERVICE_URLS = {
 }
 
 # AWS Configuration
-SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL", "http://localstack:4566/000000000000/ai-jobs")
+SQS_QUEUE_URL = os.getenv(
+    "SQS_QUEUE_URL", "http://localstack:4566/000000000000/ai-jobs"
+)
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
 # SQS client
-sqs_client = boto3.client('sqs', region_name=AWS_REGION)
+sqs_client = boto3.client("sqs", region_name=AWS_REGION)
 
 
 class ChatMessage(BaseModel):
@@ -84,14 +86,14 @@ def send_to_sqs(job_data: dict) -> str:
     message = {
         "job_id": job_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        **job_data
+        **job_data,
     }
-    
+
     try:
         response = sqs_client.send_message(
             QueueUrl=SQS_QUEUE_URL,
             MessageBody=json.dumps(message),
-            MessageGroupId=job_data.get("conversation_id", "default")
+            MessageGroupId=job_data.get("conversation_id", "default"),
         )
         logger.info(f"Job {job_id} sent to SQS: {response['MessageId']}")
         return job_id
@@ -111,7 +113,9 @@ def health():
 async def get_settings():
     """Get user settings"""
     try:
-        return await proxy_request("GET", f"{SERVICE_URLS['settings']}/settings", timeout=30)
+        return await proxy_request(
+            "GET", f"{SERVICE_URLS['settings']}/settings", timeout=30
+        )
     except Exception as e:
         logger.error(f"Error fetching settings: {e}")
         raise
@@ -121,7 +125,12 @@ async def get_settings():
 async def update_settings(payload: SettingsUpdate):
     """Update user settings"""
     try:
-        return await proxy_request("POST", f"{SERVICE_URLS['settings']}/settings", json=payload.dict(), timeout=30)
+        return await proxy_request(
+            "POST",
+            f"{SERVICE_URLS['settings']}/settings",
+            json=payload.dict(),
+            timeout=30,
+        )
     except Exception as e:
         logger.error(f"Error updating settings: {e}")
         raise
@@ -132,7 +141,9 @@ async def update_settings(payload: SettingsUpdate):
 async def get_conversations():
     """List all conversations for user"""
     try:
-        return await proxy_request("GET", f"{SERVICE_URLS['conversations']}/conversations", timeout=30)
+        return await proxy_request(
+            "GET", f"{SERVICE_URLS['conversations']}/conversations", timeout=30
+        )
     except Exception as e:
         logger.error(f"Error fetching conversations: {e}")
         raise
@@ -142,7 +153,12 @@ async def get_conversations():
 async def create_conversation(payload: dict):
     """Create new conversation"""
     try:
-        return await proxy_request("POST", f"{SERVICE_URLS['conversations']}/conversations", json=payload, timeout=30)
+        return await proxy_request(
+            "POST",
+            f"{SERVICE_URLS['conversations']}/conversations",
+            json=payload,
+            timeout=30,
+        )
     except Exception as e:
         logger.error(f"Error creating conversation: {e}")
         raise
@@ -152,7 +168,11 @@ async def create_conversation(payload: dict):
 async def get_conversation(conversation_id: str):
     """Get specific conversation"""
     try:
-        return await proxy_request("GET", f"{SERVICE_URLS['conversations']}/conversations/{conversation_id}", timeout=30)
+        return await proxy_request(
+            "GET",
+            f"{SERVICE_URLS['conversations']}/conversations/{conversation_id}",
+            timeout=30,
+        )
     except Exception as e:
         logger.error(f"Error fetching conversation: {e}")
         raise
@@ -162,7 +182,11 @@ async def get_conversation(conversation_id: str):
 async def get_conversation_messages(conversation_id: str):
     """Get messages in conversation"""
     try:
-        return await proxy_request("GET", f"{SERVICE_URLS['messages']}/conversations/{conversation_id}", timeout=30)
+        return await proxy_request(
+            "GET",
+            f"{SERVICE_URLS['messages']}/conversations/{conversation_id}",
+            timeout=30,
+        )
     except Exception as e:
         logger.error(f"Error fetching messages: {e}")
         raise
@@ -173,28 +197,28 @@ async def get_conversation_messages(conversation_id: str):
 async def send_chat_message(payload: ChatMessage, background_tasks: BackgroundTasks):
     """
     Send chat message - NEW ASYNC ARCHITECTURE
-    
+
     Flow:
     1. Validate message
     2. Create/get conversation
     3. Store user message
     4. Send job to SQS for async AI processing
     5. Return immediately
-    
+
     Benefits:
     - Better scalability
     - Better user experience (no blocking)
     - Queue buffering
     - Retry capability
     """
-    
+
     try:
         message = payload.message.strip()
         if not message:
             raise HTTPException(status_code=400, detail="Message cannot be empty")
-        
+
         conversation_id = payload.conversation_id
-        
+
         # Create conversation if needed
         if not conversation_id:
             conv_payload = {"title": payload.title or "New Chat"}
@@ -205,7 +229,7 @@ async def send_chat_message(payload: ChatMessage, background_tasks: BackgroundTa
                 timeout=30,
             )
             conversation_id = created.get("id", str(uuid.uuid4()))
-        
+
         # Store user message immediately
         message_record = {
             "conversation_id": conversation_id,
@@ -213,28 +237,30 @@ async def send_chat_message(payload: ChatMessage, background_tasks: BackgroundTa
             "message": message,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         await proxy_request(
             "POST",
             f"{SERVICE_URLS['messages']}/messages",
             json=message_record,
             timeout=30,
         )
-        
+
         # Send AI job to SQS (async processing)
-        job_id = send_to_sqs({
-            "conversation_id": conversation_id,
-            "message": message,
-            "type": "ai_generate"
-        })
-        
+        job_id = send_to_sqs(
+            {
+                "conversation_id": conversation_id,
+                "message": message,
+                "type": "ai_generate",
+            }
+        )
+
         return {
             "status": "accepted",
             "conversation_id": conversation_id,
             "job_id": job_id,
-            "message": "Your message is being processed. The AI response will appear shortly."
+            "message": "Your message is being processed. The AI response will appear shortly.",
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -247,10 +273,7 @@ async def get_job_status(job_id: str):
     """Check status of AI job (optional polling endpoint)"""
     try:
         # In production, check job status from database
-        return {
-            "job_id": job_id,
-            "status": "processing"
-        }
+        return {"job_id": job_id, "status": "processing"}
     except Exception as e:
         logger.error(f"Error checking job status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -263,12 +286,19 @@ async def queue_stats():
     try:
         attrs = sqs_client.get_queue_attributes(
             QueueUrl=SQS_QUEUE_URL,
-            AttributeNames=['ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesNotVisible']
+            AttributeNames=[
+                "ApproximateNumberOfMessages",
+                "ApproximateNumberOfMessagesNotVisible",
+            ],
         )
         return {
             "queue_url": SQS_QUEUE_URL,
-            "approximate_messages": attrs['Attributes'].get('ApproximateNumberOfMessages', 0),
-            "processing": attrs['Attributes'].get('ApproximateNumberOfMessagesNotVisible', 0),
+            "approximate_messages": attrs["Attributes"].get(
+                "ApproximateNumberOfMessages", 0
+            ),
+            "processing": attrs["Attributes"].get(
+                "ApproximateNumberOfMessagesNotVisible", 0
+            ),
         }
     except Exception as e:
         logger.error(f"Error getting queue stats: {e}")
