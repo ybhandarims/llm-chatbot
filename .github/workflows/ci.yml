@@ -1,0 +1,187 @@
+name: CI — Tests, Lint, Build, Image Build
+
+on:
+  push:
+    branches:
+      - main
+      - release/**
+    paths:
+      - 'microservices/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+      - release/**
+    paths:
+      - 'microservices/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint code
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install lint tools
+        run: python -m pip install --upgrade pip ruff
+
+      - name: Run backend lint
+        run: |
+          set -euo pipefail
+          if [ -d microservices ]; then
+            ruff check microservices/
+          else
+            echo "microservices directory not found; skipping backend lint"
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'microservices/frontend/package-lock.json'
+
+      - name: Run frontend lint if configured
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f package.json ]; then
+            echo "No frontend package.json found; skipping frontend lint"
+            exit 0
+          fi
+
+          has_lint=$(node -e "const p=require('./package.json'); process.stdout.write((p.scripts && p.scripts.lint) ? 'yes' : 'no')")
+          if [ "$has_lint" = "yes" ]; then
+            npm ci
+            npm run lint
+          else
+            echo "No npm lint script found; skipping frontend lint"
+          fi
+
+  tests:
+    runs-on: ubuntu-latest
+    name: Run unit & integration tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Prepare test reports directory
+        run: mkdir -p reports
+
+      - name: Install pytest and report plugins
+        run: python -m pip install --upgrade pip pytest pytest-cov pytest-html
+
+      - name: Install backend dependencies
+        run: |
+          set -euo pipefail
+          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service")
+          for svc in "${PY_SERVICES[@]}"; do
+            svc_path="microservices/$svc"
+            if [ -f "$svc_path/requirements.txt" ]; then
+              echo "Installing requirements for $svc"
+              python -m pip install -r "$svc_path/requirements.txt"
+            fi
+          done
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'microservices/frontend/package-lock.json'
+
+      - name: Install frontend dependencies
+        working-directory: microservices/frontend
+        run: npm ci
+
+      - name: Run unit & integration tests
+        run: |
+          set -euo pipefail
+          python microservices/scripts/full_test_pass.py
+
+      - name: Upload JUnit test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: junit-test-reports
+          path: |
+            reports/*
+            microservices/frontend/reports/*
+          if-no-files-found: warn
+
+  build:
+    runs-on: ubuntu-latest
+    name: Build validation
+    needs: [lint, tests]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Validate Python sources compile
+        run: python -m compileall microservices
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'microservices/frontend/package-lock.json'
+
+      - name: Validate frontend build if configured
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f package.json ]; then
+            echo "No frontend package.json found; skipping frontend build validation"
+            exit 0
+          fi
+
+          has_build=$(node -e "const p=require('./package.json'); process.stdout.write((p.scripts && p.scripts.build) ? 'yes' : 'no')")
+          if [ "$has_build" = "yes" ]; then
+            npm ci
+            npm run build
+          else
+            echo "No npm build script found; skipping frontend build validation"
+          fi
+
+  image-build:
+    runs-on: ubuntu-latest
+    name: Docker image build validation
+    needs: [lint, tests, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build all service images locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "frontend")
+          for svc in "${SERVICES[@]}"; do
+            echo "Building image for $svc"
+            docker build -t "llm-chatbot-$svc:${GITHUB_SHA}" "./microservices/$svc"
+          done
