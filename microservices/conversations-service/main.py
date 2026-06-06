@@ -24,8 +24,12 @@ DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "conversations")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
 # DynamoDB client
-dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
-table = dynamodb.Table(DYNAMODB_TABLE)
+def get_table():
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=AWS_REGION
+    )
+    return dynamodb.Table(DYNAMODB_TABLE)
 
 
 # Pydantic models
@@ -69,7 +73,7 @@ def create_conversation(payload: ConversationCreate):
             "updated_at": timestamp,
         }
 
-        table.put_item(Item=item)
+        get_table().put_item(Item=item)
         logger.info(f"Conversation created: {conversation_id}")
 
         return {
@@ -90,7 +94,7 @@ def list_conversations():
     try:
         user_id = "default_user"  # In production, extract from JWT
 
-        response = table.query(
+        response = get_table().query(
             KeyConditionExpression="user_id = :uid",
             ExpressionAttributeValues={":uid": user_id},
         )

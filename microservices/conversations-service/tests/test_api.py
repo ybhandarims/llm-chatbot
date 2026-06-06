@@ -1,11 +1,12 @@
-import sys
 import os
+import sys
+
 import pytest
 from fastapi.testclient import TestClient
 
-# Make the service importable by adding its parent directory to sys.path
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, ROOT)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 import main as svc
 
