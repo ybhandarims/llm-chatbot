@@ -1,4 +1,4 @@
-name: CI — Tests, Lint, Build, Image Build
+name: CI — Lint, Format, Type Check, Tests, Build, Image Build
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install lint tools
+      - name: Install backend lint tools
         run: python -m pip install --upgrade pip ruff
 
       - name: Run backend lint
@@ -52,23 +52,113 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'microservices/frontend/package-lock.json'
 
-      - name: Run frontend lint if configured
+      - name: Install frontend lint tool
         working-directory: microservices/frontend
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f package.json ]; then
-            echo "No frontend package.json found; skipping frontend lint"
-            exit 0
-          fi
+          npm ci
+          npm install --no-save eslint
 
-          has_lint=$(node -e "const p=require('./package.json'); process.stdout.write((p.scripts && p.scripts.lint) ? 'yes' : 'no')")
-          if [ "$has_lint" = "yes" ]; then
-            npm ci
+      - name: Run frontend lint
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package.json ]; then
             npm run lint
           else
-            echo "No npm lint script found; skipping frontend lint"
+            echo "No frontend package.json found; skipping frontend lint"
           fi
+
+  format-validation:
+    runs-on: ubuntu-latest
+    name: Format validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend format tool
+        run: python -m pip install --upgrade pip black
+
+      - name: Run backend format validation
+        run: |
+          set -euo pipefail
+          if [ -d microservices ]; then
+            black --check microservices/
+          else
+            echo "microservices directory not found; skipping backend format validation"
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'microservices/frontend/package-lock.json'
+
+      - name: Install frontend format tool
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save prettier
+
+      - name: Run frontend format validation
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package.json ]; then
+            npm run format:check
+          else
+            echo "No frontend package.json found; skipping frontend format validation"
+          fi
+
+  type-check:
+    runs-on: ubuntu-latest
+    name: Type check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        run: |
+          set -euo pipefail
+          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service")
+          for svc in "${PY_SERVICES[@]}"; do
+            svc_path="microservices/$svc"
+            if [ -f "$svc_path/requirements.txt" ]; then
+              echo "Installing requirements for $svc"
+              python -m pip install -r "$svc_path/requirements.txt"
+            fi
+          done
+
+      - name: Install mypy
+        run: python -m pip install --upgrade pip mypy
+
+      - name: Run backend type check
+        run: |
+          set -euo pipefail
+          mypy microservices/gateway \
+               microservices/conversations-service \
+               microservices/settings-service \
+               microservices/messages-service \
+               microservices/ai-service \
+               --ignore-missing-imports
 
   tests:
     runs-on: ubuntu-latest
@@ -130,7 +220,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Build validation
-    needs: [lint, tests]
+    needs: [lint, format-validation, type-check, tests]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -171,7 +261,7 @@ jobs:
   image-build:
     runs-on: ubuntu-latest
     name: Docker image build validation
-    needs: [lint, tests, build]
+    needs: [lint, format-validation, type-check, tests, build]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
