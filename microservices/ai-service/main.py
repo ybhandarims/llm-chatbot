@@ -11,6 +11,7 @@ import httpx
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import boto3
+from fastapi import FastAPI
 from openai import OpenAI
 
 # Configure logging
@@ -260,8 +261,6 @@ async def lifespan(app):
 
 
 # Optional: FastAPI endpoints for health checks
-from fastapi import FastAPI
-
 app = FastAPI(lifespan=lifespan)
 
 
