@@ -1,16 +1,17 @@
 """
-Conversations Service - Manages conversation data in DynamoDB
-Uses async architecture with proper error handling and logging
+Conversations Service - Manages conversation data in DynamoDB.
+Uses proper error handling and logging.
 """
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-import os
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
+
 import boto3
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,12 +24,14 @@ app = FastAPI()
 DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "conversations")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
-# DynamoDB client
+
 def get_table():
-    dynamodb = boto3.resource(
-        "dynamodb",
-        region_name=AWS_REGION
-    )
+    """Return the DynamoDB table resource.
+
+    Keeping this inside a function prevents real AWS/DynamoDB initialization
+    during module import and makes the service easier to mock in tests.
+    """
+    dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
     return dynamodb.Table(DYNAMODB_TABLE)
 
 
@@ -45,21 +48,22 @@ class ConversationCreate(BaseModel):
 class ConversationResponse(BaseModel):
     id: str
     title: str
-    messages: List[dict] = []
+    messages: list[dict] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
 
 @app.get("/health")
 def health():
-    """Health check endpoint"""
+    """Health check endpoint."""
     return {"status": "ok", "service": "conversations"}
 
 
 @app.post("/conversations")
 def create_conversation(payload: ConversationCreate):
-    """Create a new conversation"""
+    """Create a new conversation."""
     try:
+        table = get_table()
         conversation_id = str(uuid.uuid4())
         user_id = "default_user"  # In production, extract from JWT
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -73,8 +77,8 @@ def create_conversation(payload: ConversationCreate):
             "updated_at": timestamp,
         }
 
-        get_table().put_item(Item=item)
-        logger.info(f"Conversation created: {conversation_id}")
+        table.put_item(Item=item)
+        logger.info("Conversation created: %s", conversation_id)
 
         return {
             "id": conversation_id,
@@ -84,17 +88,18 @@ def create_conversation(payload: ConversationCreate):
             "updated_at": timestamp,
         }
     except Exception as e:
-        logger.error(f"Error creating conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating conversation: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/conversations")
 def list_conversations():
-    """List all conversations for user"""
+    """List all conversations for user."""
     try:
+        table = get_table()
         user_id = "default_user"  # In production, extract from JWT
 
-        response = get_table().query(
+        response = table.query(
             KeyConditionExpression="user_id = :uid",
             ExpressionAttributeValues={":uid": user_id},
         )
@@ -116,14 +121,15 @@ def list_conversations():
 
         return conversations
     except Exception as e:
-        logger.error(f"Error listing conversations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing conversations: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/conversations/{conversation_id}")
 def get_conversation(conversation_id: str):
-    """Get specific conversation with all messages"""
+    """Get specific conversation with all messages."""
     try:
+        table = get_table()
         user_id = "default_user"  # In production, extract from JWT
 
         response = table.get_item(
@@ -144,18 +150,18 @@ def get_conversation(conversation_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting conversation: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/conversations/{conversation_id}/messages")
 def append_message(conversation_id: str, payload: Message):
-    """Append a message to a conversation"""
+    """Append a message to a conversation."""
     try:
+        table = get_table()
         user_id = "default_user"  # In production, extract from JWT
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Get current conversation
         response = table.get_item(
             Key={"user_id": user_id, "conversation_id": conversation_id}
         )
@@ -166,7 +172,6 @@ def append_message(conversation_id: str, payload: Message):
         item = response["Item"]
         messages = item.get("messages", [])
 
-        # Add new message
         new_message = {
             "role": payload.role,
             "content": payload.content,
@@ -174,14 +179,13 @@ def append_message(conversation_id: str, payload: Message):
         }
         messages.append(new_message)
 
-        # Update conversation
         table.update_item(
             Key={"user_id": user_id, "conversation_id": conversation_id},
             UpdateExpression="SET messages = :msgs, updated_at = :updated",
             ExpressionAttributeValues={":msgs": messages, ":updated": timestamp},
         )
 
-        logger.info(f"Message added to conversation {conversation_id}")
+        logger.info("Message added to conversation %s", conversation_id)
 
         return {
             "id": conversation_id,
@@ -191,20 +195,21 @@ def append_message(conversation_id: str, payload: Message):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error appending message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error appending message: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.delete("/conversations/{conversation_id}")
 def delete_conversation(conversation_id: str):
-    """Delete a conversation"""
+    """Delete a conversation."""
     try:
+        table = get_table()
         user_id = "default_user"  # In production, extract from JWT
 
         table.delete_item(Key={"user_id": user_id, "conversation_id": conversation_id})
 
-        logger.info(f"Conversation deleted: {conversation_id}")
+        logger.info("Conversation deleted: %s", conversation_id)
         return {"status": "deleted", "conversation_id": conversation_id}
     except Exception as e:
-        logger.error(f"Error deleting conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting conversation: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
