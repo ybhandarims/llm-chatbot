@@ -13,9 +13,15 @@ on:
       - ".github/workflows/microservices-unit-tests.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: read
+
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "24"
+  COVERAGE_THRESHOLD: "80"
 
 jobs:
   python-unit-tests:
@@ -50,30 +56,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r ${{ matrix.service_path }}/requirements.txt pytest pytest-cov
 
-      - name: Run fast unit (health) tests and write JUnit XML
+      - name: Run Python unit tests with JUnit and coverage threshold
         run: |
           mkdir -p reports
-          pytest ${{ matrix.service_path }}/tests/test_health.py -q --junitxml=reports/${{ matrix.service_name }}-unit.xml --cov=${{ matrix.service_path }} --cov-report=xml:reports/${{ matrix.service_name }}-coverage.xml --cov-report=html:reports/${{ matrix.service_name }}-htmlcov --cov-report=term-missing || true
+          pytest ${{ matrix.service_path }}/tests/test_health.py -q \
+            --junitxml=reports/${{ matrix.service_name }}-unit.xml \
+            --cov=${{ matrix.service_path }} \
+            --cov-report=xml:reports/${{ matrix.service_name }}-coverage.xml \
+            --cov-report=html:reports/${{ matrix.service_name }}-htmlcov \
+            --cov-report=term-missing \
+            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
 
       - name: Upload Python unit test reports
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: python-unit-reports-${{ matrix.service_name }}
           path: reports/${{ matrix.service_name }}-unit.xml
+          if-no-files-found: warn
 
       - name: Upload Python unit coverage reports
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: python-unit-coverage-${{ matrix.service_name }}
           path: |
             reports/${{ matrix.service_name }}-coverage.xml
             reports/${{ matrix.service_name }}-htmlcov
+          if-no-files-found: warn
+
+      - name: Publish Python unit test report to GitHub Actions
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: python-unit-tests-${{ matrix.service_name }}
+          path: reports/${{ matrix.service_name }}-unit.xml
+          reporter: java-junit
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write CI completion marker
+        if: always()
         run: |
           echo "OK $(date -u) $GITHUB_SHA" > ci-complete.txt
 
       - name: Upload CI completion artifact
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ci-complete-${{ matrix.service_name }}-${{ github.sha }}
@@ -96,19 +123,21 @@ jobs:
         working-directory: microservices/frontend
         run: npm install
 
-      - name: Run frontend unit tests (Node test runner) and save JUnit XML
+      - name: Run frontend unit tests and save JUnit XML
         working-directory: microservices/frontend
         run: |
           mkdir -p reports
-          node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js || true
+          node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js
 
       - name: Upload frontend test report
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: frontend-test-report
           path: microservices/frontend/reports/frontend-tests.xml
+          if-no-files-found: warn
 
-      - name: Publish test reports to Actions (JUnit)
+      - name: Publish frontend test report to GitHub Actions
         uses: dorny/test-reporter@v3
         if: always()
         with:
@@ -118,19 +147,166 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write CI completion marker
+        if: always()
         working-directory: microservices/frontend
         run: |
           echo "OK $(date -u) $GITHUB_SHA" > ci-complete.txt
 
       - name: Upload CI completion artifact
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ci-complete-frontend-${{ github.sha }}
           path: microservices/frontend/ci-complete.txt
 
+  consolidated-unit-test-report:
+    name: Consolidated unit test report and threshold gate
+    needs: [python-unit-tests, frontend-unit-tests]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all test and coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: combined-reports
+
+      - name: Build consolidated Markdown report
+        run: |
+          python <<'PY'
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          threshold = float("${{ env.COVERAGE_THRESHOLD }}")
+          root = pathlib.Path("combined-reports")
+          report_path = pathlib.Path("consolidated-unit-test-report.md")
+          failed_marker = pathlib.Path("quality-gate-failed.txt")
+
+          junit_rows = []
+          coverage_rows = []
+          gate_failed = False
+
+          for junit_file in sorted(root.rglob("*.xml")):
+              if "coverage" in junit_file.name.lower():
+                  continue
+
+              try:
+                  tree = ET.parse(junit_file)
+                  xml_root = tree.getroot()
+              except ET.ParseError:
+                  continue
+
+              suites = []
+              if xml_root.tag == "testsuite":
+                  suites = [xml_root]
+              elif xml_root.tag == "testsuites":
+                  suites = list(xml_root.findall("testsuite"))
+
+              total_tests = total_failures = total_errors = total_skipped = 0
+              total_time = 0.0
+
+              for suite in suites:
+                  total_tests += int(float(suite.attrib.get("tests", 0)))
+                  total_failures += int(float(suite.attrib.get("failures", 0)))
+                  total_errors += int(float(suite.attrib.get("errors", 0)))
+                  total_skipped += int(float(suite.attrib.get("skipped", 0)))
+                  total_time += float(suite.attrib.get("time", 0.0))
+
+              status = "✅ PASS" if total_failures == 0 and total_errors == 0 else "❌ FAIL"
+              if status == "❌ FAIL":
+                  gate_failed = True
+
+              junit_rows.append([
+                  junit_file.name,
+                  str(total_tests),
+                  str(total_failures),
+                  str(total_errors),
+                  str(total_skipped),
+                  f"{total_time:.2f}s",
+                  status,
+              ])
+
+          for coverage_file in sorted(root.rglob("*coverage.xml")):
+              try:
+                  tree = ET.parse(coverage_file)
+                  xml_root = tree.getroot()
+              except ET.ParseError:
+                  continue
+
+              line_rate = float(xml_root.attrib.get("line-rate", 0.0)) * 100
+              branch_rate = float(xml_root.attrib.get("branch-rate", 0.0)) * 100
+              status = "✅ PASS" if line_rate >= threshold else "❌ FAIL"
+              if line_rate < threshold:
+                  gate_failed = True
+
+              coverage_rows.append([
+                  coverage_file.name,
+                  f"{line_rate:.2f}%",
+                  f"{branch_rate:.2f}%",
+                  f"{threshold:.2f}%",
+                  status,
+              ])
+
+          with report_path.open("w", encoding="utf-8") as f:
+              f.write("# Consolidated Unit Test Report\n\n")
+              f.write(f"**Coverage Threshold:** {threshold:.2f}%\n\n")
+
+              f.write("## Test Result Summary\n\n")
+              if junit_rows:
+                  f.write("| Report | Tests | Failures | Errors | Skipped | Time | Status |\n")
+                  f.write("|---|---:|---:|---:|---:|---:|---|\n")
+                  for row in junit_rows:
+                      f.write("| " + " | ".join(row) + " |\n")
+              else:
+                  f.write("No JUnit XML test reports were found.\n")
+                  gate_failed = True
+
+              f.write("\n## Coverage Summary\n\n")
+              if coverage_rows:
+                  f.write("| Coverage Report | Line Coverage | Branch Coverage | Threshold | Status |\n")
+                  f.write("|---|---:|---:|---:|---|\n")
+                  for row in coverage_rows:
+                      f.write("| " + " | ".join(row) + " |\n")
+              else:
+                  f.write("No Python coverage XML reports were found. Frontend coverage is not configured in this workflow.\n")
+
+              f.write("\n## Quality Gate Result\n\n")
+              if gate_failed:
+                  f.write("❌ **FAILED** — One or more tests failed, reports were missing, or coverage is below threshold.\n")
+              else:
+                  f.write("✅ **PASSED** — All tests passed and coverage is above threshold.\n")
+
+          print(report_path.read_text(encoding="utf-8"))
+          import os
+          with pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write(report_path.read_text(encoding="utf-8"))
+
+          if gate_failed:
+              failed_marker.write_text("quality gate failed\n", encoding="utf-8")
+          PY
+
+      - name: Upload consolidated unit test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: consolidated-unit-test-report-${{ github.sha }}
+          path: |
+            consolidated-unit-test-report.md
+            combined-reports
+          if-no-files-found: warn
+
+      - name: Fail workflow if consolidated quality gate failed
+        if: always()
+        run: |
+          if [ -f quality-gate-failed.txt ]; then
+            cat quality-gate-failed.txt
+            exit 1
+          fi
+
   collect-and-upload:
     name: Collect and upload combined artifacts
-    needs: [python-unit-tests, frontend-unit-tests]
+    needs: [python-unit-tests, frontend-unit-tests, consolidated-unit-test-report]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Download all job artifacts

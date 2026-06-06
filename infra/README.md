@@ -380,9 +380,12 @@ Why this matters:
 
 Required GitHub Secrets (set these in your repository Settings → Secrets):
 
+- `AWS_ROLE_TO_ASSUME` — optional IAM role ARN for OIDC-based deployment auth; if you set this, the workflow uses it instead of long-lived access keys
 - `AWS_ACCESS_KEY_ID` — AWS key with permissions to push to ECR and update EKS kubeconfig
 - `AWS_SECRET_ACCESS_KEY` — AWS secret
 - `AWS_ACCOUNT_ID` — numeric AWS account id used to form the ECR registry URL
+
+In plain English: you can either give the workflow a temporary role to assume, or you can keep using an access key and secret. The deploy job now checks that one of those setups exists before it tries to talk to AWS.
 
 Workflow environment defaults (edit `.github/workflows/ci-cd.yml` if needed):
 
