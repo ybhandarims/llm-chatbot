@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import httpx
 import os
 import asyncio
@@ -40,14 +41,14 @@ sqs_client = boto3.client("sqs", region_name=AWS_REGION)
 
 
 class ChatMessage(BaseModel):
-    conversation_id: str = None
+    conversation_id: Optional[str] = None
     message: str
-    title: str = None
+    title: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
-    system_prompt: str = None
-    model: str = None
+    system_prompt: Optional[str] = None
+    model: Optional[str] = None
 
 
 async def proxy_request(method: str, url: str, **kwargs):
