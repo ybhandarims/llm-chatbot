@@ -19,6 +19,10 @@ jobs:
       id-token: write
     env:
       AWS_REGION: us-east-1
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -27,34 +31,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
+          if [[ -n "${AWS_ROLE_TO_ASSUME}" ]]; then
             echo "Using AWS_ROLE_TO_ASSUME for deployment authentication"
-            exit 0
-          fi
-
-          missing=()
-          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then missing+=("AWS_ACCESS_KEY_ID"); fi
-          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then missing+=("AWS_SECRET_ACCESS_KEY"); fi
-
-          if [ "${#missing[@]}" -ne 0 ]; then
-            echo "Missing AWS deployment configuration: ${missing[*]}"
-            echo "Set AWS_ROLE_TO_ASSUME for OIDC or provide the access key and secret key secrets."
+          elif [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+            echo "Using static AWS credentials"
+          else
+            echo "Set either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
             exit 1
           fi
 
       - name: Configure AWS credentials with OIDC
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials with static keys
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
@@ -64,11 +62,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
           if [ -z "$AWS_ACCOUNT_ID" ]; then
             AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           fi
-          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
           echo "ECR_REGISTRY=$ECR_REGISTRY"
 
           SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "frontend")
@@ -94,24 +92,28 @@ jobs:
       id-token: write
     env:
       AWS_REGION: us-east-1
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       EKS_CLUSTER_NAME: chatapp-eks
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Configure AWS credentials with OIDC
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials with static keys
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
@@ -122,11 +124,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
           if [ -z "$AWS_ACCOUNT_ID" ]; then
             AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           fi
-          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
           TAG=${GITHUB_SHA}
 
           set_args=(
