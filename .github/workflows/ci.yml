@@ -71,15 +71,6 @@ jobs:
             echo "No frontend package.json found; skipping frontend lint"
           fi
 
-      - name: Install frontend lint tool
-        working-directory: microservices/frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf node_modules package-lock.json
-          npm ci
-          npm install --no-save eslint
-
       - name: Run frontend lint
         working-directory: microservices/frontend
         shell: bash
@@ -172,13 +163,11 @@ jobs:
       - name: Run backend type check
         run: |
           set -euo pipefail
-          mypy --explicit-package-bases \
-            microservices/gateway/main.py \
-            microservices/conversations-service/main.py \
-            microservices/messages-service/main.py \
-            microservices/settings-service/main.py \
-            microservices/ai-service/main.py \
-            --ignore-missing-imports
+          mypy microservices/gateway/main.py --ignore-missing-imports
+          mypy microservices/conversations-service/main.py --ignore-missing-imports
+          mypy microservices/messages-service/main.py --ignore-missing-imports
+          mypy microservices/settings-service/main.py --ignore-missing-imports
+          mypy microservices/ai-service/main.py --ignore-missing-imports
 
   tests:
     runs-on: ubuntu-latest
