@@ -17,34 +17,53 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  AWS_REGION: us-east-1
-  TF_DIR: terraform
-  TF_STATE_BUCKET: llm-chatbot-terraform-state
-  TF_LOCK_TABLE: terraform-locks
-  TF_STATE_KEY: prod/terraform.tfstate
-
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      TF_DIR: terraform
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials with OIDC
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+      - name: Validate deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${AWS_ROLE_TO_ASSUME}" ]]; then
+            echo "Using AWS OIDC role authentication"
+          elif [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+            echo "Using static AWS credentials"
+          else
+            echo "Set either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
+            exit 1
+          fi
+
+          if [[ -z "${TF_STATE_BUCKET}" || -z "${TF_LOCK_TABLE}" ]]; then
+            echo "Set TF_STATE_BUCKET and TF_LOCK_TABLE for remote Terraform state"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials using OIDC
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure AWS credentials with static keys
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+      - name: Configure AWS credentials using static keys
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
@@ -60,11 +79,10 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform init \
-            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_LOCK_TABLE }}" \
-            -input=false
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
 
       - name: Terraform validate
         working-directory: ${{ env.TF_DIR }}
@@ -72,9 +90,9 @@ jobs:
 
       - name: Terraform plan
         working-directory: ${{ env.TF_DIR }}
-        run: terraform plan -out=tfplan -input=false
+        run: terraform plan -out=tfplan
 
       - name: Terraform apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         working-directory: ${{ env.TF_DIR }}
         run: terraform apply -auto-approve tfplan
