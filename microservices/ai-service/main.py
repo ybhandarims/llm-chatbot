@@ -1,3 +1,4 @@
+@'
 """
 AI Worker Service - Processes async AI jobs from SQS queue
 """
@@ -66,14 +67,13 @@ class AIWorker:
                 logger.error("Failed to generate response for job %s", job_id)
                 return False
 
-            success = await self._store_message(
-                conversation_id, "assistant", ai_response
-            )
+            success = await self._store_message(conversation_id, "assistant", ai_response)
             if not success:
                 logger.error("Failed to store AI response for job %s", job_id)
                 return False
 
             sqs_client.delete_message(QueueUrl=SQS_QUEUE_URL, ReceiptHandle=message_id)
+
             logger.info("Successfully processed job %s", job_id)
             return True
 
@@ -230,3 +230,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8080)
+'@ | Set-Content microservices\ai-service\main.py -Encoding utf8
