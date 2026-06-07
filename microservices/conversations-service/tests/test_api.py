@@ -32,7 +32,9 @@ class FakeTable:
             return {"Item": self.items[key]}
         return {}
 
-    def update_item(self, Key=None, UpdateExpression=None, ExpressionAttributeValues=None):
+    def update_item(
+        self, Key=None, UpdateExpression=None, ExpressionAttributeValues=None
+    ):
         key = (Key["user_id"], Key["conversation_id"])
         if key not in self.items:
             raise Exception("Not found")

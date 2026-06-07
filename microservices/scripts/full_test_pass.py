@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from shutil import which
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path(sys.executable)
 NPM = which("npm.cmd") or which("npm") or "npm.cmd"
