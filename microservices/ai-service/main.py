@@ -106,7 +106,7 @@ def send_to_sqs(job_data: dict) -> str:
 @app.get("/health")
 def health():
     """Health check endpoint"""
-    return {"status": "ok", "service": "gateway"}
+    return {"status": "ok", "service": "ai-worker"}
 
 
 # CRUD Operations for Settings
