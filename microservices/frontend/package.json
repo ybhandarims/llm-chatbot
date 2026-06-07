@@ -5,7 +5,7 @@
   "scripts": {
     "start": "npx http-server public -p 3000",
     "test": "node --test tests/*.test.js",
-    "test:reports": "mkdir -p reports && node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js",
+    "test:reports": "node -e \"require('fs').mkdirSync('reports', { recursive: true })\" && node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
