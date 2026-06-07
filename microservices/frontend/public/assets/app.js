@@ -96,7 +96,8 @@ async function apiFetch(path, options = {}) {
 
 async function loadSystemPrompt() {
   const payload = await apiFetch("/settings");
-  document.getElementById('system-prompt-input').value = payload.system_prompt || payload.system_prompt || '';
+  document.getElementById("system-prompt-input").value =
+    payload.system_prompt || payload.system_prompt || "";
 }
 
 async function loadConversations() {
@@ -136,7 +137,11 @@ async function saveSystemPrompt() {
   setStatus("Saving prompt...");
   await apiFetch("/settings", {
     method: "POST",
-    body: JSON.stringify({ system_prompt: document.getElementById('system-prompt-input').value.trim() }),
+    body: JSON.stringify({
+      system_prompt: document
+        .getElementById("system-prompt-input")
+        .value.trim(),
+    }),
   });
   setStatus("System prompt updated");
 }
