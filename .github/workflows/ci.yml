@@ -153,13 +153,13 @@ jobs:
       - name: Run backend type check
         run: |
           set -euo pipefail
-          mypy \
-          microservices/gateway/main.py \
-          microservices/conversations-service/main.py \
-          microservices/messages-service/main.py \
-          microservices/settings-service/main.py \
-          microservices/ai-service/main.py \
-          --ignore-missing-imports
+          mypy --explicit-package-bases \
+            microservices/gateway/main.py \
+            microservices/conversations-service/main.py \
+            microservices/messages-service/main.py \
+            microservices/settings-service/main.py \
+            microservices/ai-service/main.py \
+            --ignore-missing-imports
 
   tests:
     runs-on: ubuntu-latest
