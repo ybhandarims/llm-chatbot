@@ -71,6 +71,25 @@ jobs:
             echo "No frontend package.json found; skipping frontend lint"
           fi
 
+      - name: Install frontend lint tool
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules package-lock.json
+          npm ci
+          npm install --no-save eslint
+
+      - name: Run frontend lint
+        working-directory: microservices/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package.json ]; then
+            npm run lint
+          else
+            echo "No frontend package.json found; skipping frontend lint"
+          fi
   format-validation:
     runs-on: ubuntu-latest
     name: Format validation
