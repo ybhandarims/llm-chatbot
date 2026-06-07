@@ -1,0 +1,10 @@
+aws_region = "us-east-1"
+
+repository_names = [
+  "llm-chatbot/gateway",
+  "llm-chatbot/conversations",
+  "llm-chatbot/messages",
+  "llm-chatbot/settings",
+  "llm-chatbot/ai-worker",
+  "llm-chatbot/frontend",
+]

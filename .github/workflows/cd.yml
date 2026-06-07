@@ -7,7 +7,7 @@ on:
       - release/**
     paths:
       - 'microservices/**'
-      - 'infra/**'
+      - 'infra/helm/**'
       - '.github/workflows/**'
   workflow_dispatch:
 
@@ -35,18 +35,24 @@ jobs:
           missing=()
           if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then missing+=("AWS_ACCESS_KEY_ID"); fi
           if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then missing+=("AWS_SECRET_ACCESS_KEY"); fi
-          if [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then missing+=("AWS_ACCOUNT_ID"); fi
 
           if [ "${#missing[@]}" -ne 0 ]; then
             echo "Missing AWS deployment configuration: ${missing[*]}"
-            echo "Set AWS_ROLE_TO_ASSUME for OIDC or provide the access key, secret, and account ID secrets."
+            echo "Set AWS_ROLE_TO_ASSUME for OIDC or provide the access key and secret key secrets."
             exit 1
           fi
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials with OIDC
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials with static keys
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
@@ -58,7 +64,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          if [ -z "$AWS_ACCOUNT_ID" ]; then
+            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          fi
+          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           echo "ECR_REGISTRY=$ECR_REGISTRY"
 
           SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "frontend")
@@ -89,10 +99,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials with OIDC
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials with static keys
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
@@ -105,7 +122,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          if [ -z "$AWS_ACCOUNT_ID" ]; then
+            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          fi
+          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           TAG=${GITHUB_SHA}
 
           set_args=(

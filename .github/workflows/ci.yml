@@ -7,7 +7,7 @@ on:
       - release/**
     paths:
       - 'microservices/**'
-      - 'infra/**'
+      - 'infra/helm/**'
       - '.github/workflows/**'
   pull_request:
     branches:
@@ -15,7 +15,7 @@ on:
       - release/**
     paths:
       - 'microservices/**'
-      - 'infra/**'
+      - 'infra/helm/**'
       - '.github/workflows/**'
   workflow_dispatch:
 
@@ -59,17 +59,6 @@ jobs:
           set -euo pipefail
           npm ci
           npm install --no-save eslint
-
-      - name: Run frontend lint
-        working-directory: microservices/frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f package.json ]; then
-            npm run lint
-          else
-            echo "No frontend package.json found; skipping frontend lint"
-          fi
 
       - name: Run frontend lint
         working-directory: microservices/frontend
