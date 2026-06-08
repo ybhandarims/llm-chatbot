@@ -79,9 +79,17 @@ jobs:
               gateway) imagename="gateway" ;;
               frontend) imagename="frontend" ;;
             esac
-            echo "Building $svc -> $ECR_REGISTRY/llm-chatbot/$imagename:${GITHUB_SHA}"
-            docker build -t "$ECR_REGISTRY/llm-chatbot/$imagename:${GITHUB_SHA}" "./microservices/$svc"
-            docker push "$ECR_REGISTRY/llm-chatbot/$imagename:${GITHUB_SHA}"
+
+            repo_name="llm-chatbot/$imagename"
+
+            if ! aws ecr describe-repositories --repository-names "$repo_name" >/dev/null 2>&1; then
+              echo "Creating ECR repository: $repo_name"
+              aws ecr create-repository --repository-name "$repo_name" >/dev/null
+            fi
+
+            echo "Building $svc -> $ECR_REGISTRY/$repo_name:${GITHUB_SHA}"
+            docker build -t "$ECR_REGISTRY/$repo_name:${GITHUB_SHA}" "./microservices/$svc"
+            docker push "$ECR_REGISTRY/$repo_name:${GITHUB_SHA}"
           done
 
   deploy:
