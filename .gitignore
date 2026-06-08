@@ -4,3 +4,18 @@
 terraform-bootstrap/.terraform/
 terraform-bootstrap/terraform.tfstate
 terraform-bootstrap/terraform.tfstate.backup
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Terraform plans
+*.tfplan
+
+# Local files
+*.log
+
+# Python
+.venv/
