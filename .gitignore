@@ -1,21 +1,17 @@
+# Terraform local cache and state
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.log
 
-# ignore node modules
-/microservices/frontend/node_modules/
-terraform-bootstrap/.terraform/
-terraform-bootstrap/terraform.tfstate
-terraform-bootstrap/terraform.tfstate.backup
+# Terraform lock file should normally be committed, so do NOT ignore it
+# .terraform.lock.hcl
 
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.*
-.terraform.lock.hcl
-
-# Terraform plans
-*.tfplan
-
-# Local files
-*.log
-
-# Python
+# Python virtual environment
 .venv/
+
+# Optional: if you actually have a terraform-bootstrap directory
+# terraform-bootstrap/.terraform/
+# terraform-bootstrap/*.tfstate
+# terraform-bootstrap/*.tfstate.backup
