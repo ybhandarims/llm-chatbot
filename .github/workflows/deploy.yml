@@ -119,7 +119,8 @@ jobs:
         run: |
           set -euo pipefail
           aws eks wait cluster-active --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}"
-
+          aws sts get-caller-identity
+          aws eks describe-cluster --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}"
       - name: Update kubeconfig
         shell: bash
         run: |
