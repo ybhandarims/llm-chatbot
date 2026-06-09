@@ -94,3 +94,15 @@ variable "node_min_size" {
   type        = number
   default     = 1
 }
+
+variable "workload_namespace" {
+  description = "Kubernetes namespace used by the application workloads"
+  type        = string
+  default     = "chatbot"
+}
+
+variable "workload_service_account_name" {
+  description = "Kubernetes service account used by the application workloads"
+  type        = string
+  default     = "chatbot-workload"
+}

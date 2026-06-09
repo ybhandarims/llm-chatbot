@@ -47,7 +47,7 @@ ingress:
 # IRSA (IAM Roles for Service Accounts)
 irsa:
   enabled: true
-  roleArn: "arn:aws:iam::396608772637:role/llm-chatbot-workload"
+  roleArn: ""
   serviceAccount: chatbot-workload
 
 # Resource requirements for budget-conscious setup
@@ -211,6 +211,11 @@ observability:
 
 # Probes configuration
 probes:
+  startup:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 12
   readiness:
     initialDelaySeconds: 10
     periodSeconds: 10
@@ -218,24 +223,6 @@ probes:
     failureThreshold: 3
   liveness:
     initialDelaySeconds: 30
-    periodSeconds: 20
-    timeoutSeconds: 5
-    failureThreshold: 3
-  startup:
-    initialDelaySeconds: 0
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 30
-
-# Network policies
-networkPolicy:
-  enabled: true
-  policyTypes:
-    - Ingress
-    - Egress
-
-# Priority class for critical services
-priorityClass:
-  enabled: true
-  critical: "system-cluster-critical"
-  normal: "default"
+    failureThreshold: 3
