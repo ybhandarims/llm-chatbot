@@ -65,6 +65,26 @@ services:
     networks:
       - app-network
 
+  auth:
+    build: ./auth-service
+    ports:
+      - "8005:8005"
+    environment:
+      - SERVICE_NAME=auth
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
   # Gateway with SQS integration
   gateway:
     build: ./gateway
@@ -76,6 +96,7 @@ services:
       - SETTINGS_URL=http://settings:8001
       - CONVERSATIONS_URL=http://conversations:8002
       - MESSAGES_URL=http://messages:8003
+      - AUTH_URL=http://auth:8005
       - SQS_QUEUE_URL=http://localstack:4566/000000000000/ai-jobs
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-localstack}
@@ -84,6 +105,7 @@ services:
       - settings
       - conversations
       - messages
+      - auth
       - localstack
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -147,6 +169,18 @@ services:
       - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "./localstack-init.sh:/docker-entrypoint-initaws.d/init-aws.sh"
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - app-network
 

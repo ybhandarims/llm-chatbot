@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -28,6 +28,7 @@ SERVICE_URLS = {
     "settings": os.getenv("SETTINGS_URL", "http://settings:8001"),
     "conversations": os.getenv("CONVERSATIONS_URL", "http://conversations:8002"),
     "messages": os.getenv("MESSAGES_URL", "http://messages:8003"),
+    "auth": os.getenv("AUTH_URL", "http://auth:8005"),
 }
 
 # AWS Configuration
@@ -81,6 +82,11 @@ async def proxy_request(method: str, url: str, **kwargs):
             raise HTTPException(status_code=500, detail=str(e))
 
 
+async def auth_proxy(method: str, path: str, **kwargs):
+    url = f"{SERVICE_URLS['auth']}{path}"
+    return await proxy_request(method, url, **kwargs)
+
+
 def send_to_sqs(job_data: dict) -> str:
     """Send job to SQS for async processing"""
     job_id = str(uuid.uuid4())
@@ -107,6 +113,48 @@ def send_to_sqs(job_data: dict) -> str:
 def health():
     """Health check endpoint"""
     return {"status": "ok", "service": "gateway"}
+
+
+@app.post("/api/auth/login")
+async def login(payload: dict):
+    """Proxy login requests to the auth service"""
+    return await auth_proxy("POST", "/api/login", json=payload, timeout=30)
+
+
+@app.post("/api/auth/refresh")
+async def refresh(payload: dict):
+    """Proxy refresh token requests to the auth service"""
+    return await auth_proxy("POST", "/api/refresh", json=payload, timeout=30)
+
+
+@app.post("/api/auth/logout")
+async def logout(payload: Optional[dict] = None, authorization: Optional[str] = Header(None)):
+    """Proxy logout requests to the auth service"""
+    headers = {}
+    if authorization:
+        headers["Authorization"] = authorization
+    return await auth_proxy(
+        "POST",
+        "/api/logout",
+        json=payload or {},
+        headers=headers,
+        timeout=30,
+    )
+
+
+@app.post("/api/auth/authorize")
+async def authorize(payload: dict, authorization: Optional[str] = Header(None)):
+    """Proxy authorization checks to the auth service"""
+    headers = {}
+    if authorization:
+        headers["Authorization"] = authorization
+    return await auth_proxy(
+        "POST",
+        "/api/authorize",
+        json=payload,
+        headers=headers,
+        timeout=30,
+    )
 
 
 # CRUD Operations for Settings

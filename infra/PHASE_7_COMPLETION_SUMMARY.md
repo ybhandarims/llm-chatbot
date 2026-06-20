@@ -7,7 +7,7 @@
 
 ## Overview
 
-All infrastructure components have been successfully deployed, configured, and tested end-to-end. The LLM Chatbot microservices architecture is fully operational on AWS EKS with proper IRSA security, managed AWS services integration, and external LoadBalancer access.
+All infrastructure components have been successfully deployed, configured, and tested end-to-end. The LLM Chatbot microservices architecture is fully operational on AWS EKS with proper IRSA security, managed AWS services integration, and external ALB ingress access.
 
 ---
 
@@ -26,13 +26,14 @@ All infrastructure components have been successfully deployed, configured, and t
 - ✅ SQS access: Verified working
 
 **Key Fixes Applied**:
-1. **Service Type Issue**: Services were deployed as `ClusterIP` (internal-only)
-   - **Fix**: Patched gateway and frontend to `LoadBalancer` type
-   - **Result**: AWS ALB automatically provisioned with external DNS names
+1. **Ingress configuration issue**: Services were correctly deployed as `ClusterIP`, but the ALB ingress resource needed to be validated and configured correctly for external access.
+   - **Fix**: Verified the AWS Load Balancer Controller and the `chatapp` ingress resource
+   - **Result**: External traffic was routed through the ALB ingress hostname and path rules
    - **Commands**:
      ```bash
-     kubectl patch svc gateway -n chatbot -p '{"spec": {"type": "LoadBalancer"}}'
-     kubectl patch svc frontend -n chatbot -p '{"spec": {"type": "LoadBalancer"}}'
+     kubectl get ingress chatapp -n chatbot
+     kubectl describe ingress chatapp -n chatbot
+     kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=50
      ```
 
 ---
@@ -118,8 +119,8 @@ settings-54584d8798-j9zmd        1/1     Running   0          36m
 NAME            TYPE           CLUSTER-IP       EXTERNAL-IP                                                               PORT(S)
 ai              ClusterIP      172.20.166.68    <none>                                                                    8004/TCP
 conversations   ClusterIP      172.20.77.225    <none>                                                                    8002/TCP
-frontend        LoadBalancer   172.20.62.239    a52206e77a5a345b0aaade82f606d5aa-1412120485.us-east-1.elb.amazonaws.com   3000:32640/TCP
-gateway         LoadBalancer   172.20.216.150   a0f7728f50e64408bae9e634f3dac391-1485110274.us-east-1.elb.amazonaws.com   8080:31824/TCP
+frontend        ClusterIP      172.20.62.239    <none>                                                                    3000/TCP
+gateway         ClusterIP      172.20.216.150   <none>                                                                    8080/TCP
 messages        ClusterIP      172.20.9.145     <none>                                                                    8003/TCP
 settings        ClusterIP      172.20.91.96     <none>                                                                    8001/TCP
 ```
@@ -141,10 +142,10 @@ settings        ClusterIP      172.20.91.96     <none>                          
 **Root Cause**: `llm-chatbot-workload` IAM role had empty/null policies
 **Solution**: Attached `llm-chatbot-workload-dynamodb-sqs` inline policy with required permissions
 
-### Issue 2: Service Type Was ClusterIP
-**Problem**: Gateway LoadBalancer service not getting external IP (still showing `<pending>`)
-**Root Cause**: Service was created as `ClusterIP` type instead of `LoadBalancer`
-**Solution**: Patched service to `LoadBalancer` type; AWS ALB auto-provisioned
+### Issue 2: External access was misconfigured
+**Problem**: Gateway and frontend traffic was not reachable through the ALB ingress
+**Root Cause**: The ingress resource was not fully provisioned or path rules were misconfigured for the `chatapp` ingress
+**Solution**: Verified the AWS Load Balancer Controller, validated the `chatapp` ingress, and confirmed application path routing for `/` and `/api`
 
 ### Issue 3: IRSA Environment Variables Not Injected Initially
 **Problem**: Pods had no AWS_ROLE_ARN or AWS_WEB_IDENTITY_TOKEN_FILE environment variables
@@ -183,11 +184,11 @@ settings        ClusterIP      172.20.91.96     <none>                          
 - ✅ IAM Roles for Service Accounts (IRSA) working
 
 ### Kubernetes Services
-- ✅ Gateway: LoadBalancer with external IP
-- ✅ Frontend: LoadBalancer with external IP
+- ✅ Gateway: ClusterIP service exposed externally through ALB ingress path rules
+- ✅ Frontend: ClusterIP service exposed externally through ALB ingress path rules
 - ✅ Internal services: ClusterIP (conversations, messages, settings, ai-worker)
 - ✅ All services discoverable via DNS within cluster
-- ✅ External LoadBalancer endpoints responding to HTTP requests
+- ✅ External ALB ingress hostname responding to HTTP requests
 
 ### API Functionality
 - ✅ Health endpoint responding (GET /health → 200 OK)
@@ -205,7 +206,7 @@ settings        ClusterIP      172.20.91.96     <none>                          
 
 2. **IAM Policies Must Be Attached**: IRSA roles need explicit IAM policies; empty roles have no permissions even with correct trust relationship.
 
-3. **LoadBalancer Service Type Required for External Access**: Default `ClusterIP` only works within cluster. Must use `LoadBalancer` type for external access.
+3. **ALB ingress is required for external access**: Default `ClusterIP` services only work within the cluster. External traffic must be routed through an ALB ingress hostname and path rules.
 
 4. **Configuration Must Be in Secrets**: Environment variables and credentials (like SQS URLs) must be in Kubernetes secrets and injected into pods; they won't be auto-discovered.
 
@@ -241,10 +242,10 @@ settings        ClusterIP      172.20.91.96     <none>                          
 
 - `infra/INFRASTRUCTURE_RUNBOOK.md` - Documentation updated with actual results
 - AWS IAM roles - Added `llm-chatbot-workload-dynamodb-sqs` policy
-- Kubernetes services - Patched gateway and frontend to LoadBalancer type
+- Kubernetes services - Verified gateway and frontend as ClusterIP services exposed via ALB ingress
 - Kubernetes secrets - Added SQS queue URLs
 - Kubernetes deployments - Restarted all pods for IRSA configuration
- - [infra/TECHNOLOGY_DECISIONS.md](infra/TECHNOLOGY_DECISIONS.md) - Added rationale for chosen technologies and alternatives
+- [infra/TECHNOLOGY_DECISIONS.md](infra/TECHNOLOGY_DECISIONS.md) - Added rationale for chosen technologies and alternatives
 
 ---
 
@@ -264,8 +265,8 @@ aws sqs get-queue-url --queue-name ai-jobs-dlq.fifo --region us-east-1 --query '
 # Check service types
 kubectl get svc -n chatbot
 
-# Verify LoadBalancer assignment
-kubectl get svc gateway -n chatbot -o wide
+# Verify ALB ingress hostname
+kubectl get ingress chatapp -n chatbot -o wide
 
 # Restart pods
 kubectl rollout restart deployment/gateway -n chatbot

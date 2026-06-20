@@ -1262,14 +1262,14 @@ rm alb-policy.json
 **What this phase does**:
 - Uses Helm (Kubernetes package manager) to deploy all 6 microservices
 - Creates 2 replicas per service (12 pods total) for high availability
-- Configures services to expose APIs (2 external LoadBalancers, 4 internal ClusterIPs)
-- Sets up resource limits and health checks
+- Configures ClusterIP services for internal communication and an AWS ALB ingress for external access
+- Sets up resource limits, probes, and security settings
 
 **Why it's important**:
 - **Helm charts**: Pre-configured, reusable deployment templates
 - **Replicas**: If one pod crashes, the other continues serving requests
-- **LoadBalancer services**: External internet access (LoadBalancer creates AWS ALB)
-- **ClusterIP services**: Internal-only communication (other pods can reach them)
+- **ALB ingress**: Exposes frontend and gateway externally while keeping backend services internal
+- **ClusterIP services**: Internal-only communication for settings, conversations, messages, and AI worker
 
 **How it works**:
 ```
@@ -1279,19 +1279,19 @@ Helm Install (processes templates with values)
     ↓
 Kubernetes manifests created
     ↓
-6 Services deployed with 2 replicas each = 12 pods
+6 services deployed as ClusterIP
     ↓
-2 LoadBalancers created automatically
+One AWS ALB ingress resource created for external access
     ↓
-External DNS assigned to LoadBalancers
+External hostname assigned to ingress
 ```
 
 **Expected outcomes**:
 - All 6 services deployed (`kubectl get services -n chatbot`)
 - 12 pods total in Running state with 0 restarts
-- 2 LoadBalancer services with external DNS hostnames
-- Gateway and frontend accessible externally
-- Can reach other services internally from pods
+- One ingress resource with external DNS hostname
+- Gateway and frontend accessible externally through ALB paths
+- Other services reachable internally from pods
 
 ### Step 5.1: Update Helm Values
 
@@ -1408,7 +1408,7 @@ kubectl get secrets -n chatbot
 **PowerShell**:
 ```powershell
 # Deploy using Helm
-helm upgrade --install llm-chatbot .\infra\helm\chatapp `
+helm upgrade --install chatapp .\infra\helm\chatapp `
   -n chatbot `
   --values .\infra\helm\chatapp\values.yaml `
   --set images.frontend.repository="$Env:ECR_REGISTRY/llm-chatbot/frontend" `
@@ -1427,7 +1427,7 @@ kubectl rollout status deployment/frontend -n chatbot --timeout=10m
 **Bash**:
 ```bash
 # Deploy using Helm
-helm upgrade --install llm-chatbot ./infra/helm/chatapp \
+helm upgrade --install chatapp ./infra/helm/chatapp \
   -n chatbot \
   --values ./infra/helm/chatapp/values.yaml \
   --set images.frontend.repository="${ECR_REGISTRY}/llm-chatbot/frontend" \
@@ -1461,12 +1461,12 @@ kubectl get pods -n chatbot
 # Check services
 kubectl get svc -n chatbot
 
-# Get LoadBalancer IPs
-$GATEWAY_LB=$(kubectl get svc gateway -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-$FRONTEND_LB=$(kubectl get svc frontend -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+# Check ingress
+kubectl get ingress -n chatbot
 
-Write-Host "Gateway LoadBalancer: $GATEWAY_LB"
-Write-Host "Frontend LoadBalancer: $FRONTEND_LB"
+# Get the ALB hostname for the chatapp ingress
+$ALB_HOST=$(kubectl get ingress chatapp -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+Write-Host "ALB Hostname: $ALB_HOST"
 ```
 
 **Bash**:
@@ -1474,15 +1474,16 @@ Write-Host "Frontend LoadBalancer: $FRONTEND_LB"
 # Check pods
 kubectl get pods -n chatbot
 
-# Check services  
+# Check services
 kubectl get svc -n chatbot
 
-# Get LoadBalancer endpoints
-GATEWAY_LB=$(kubectl get svc gateway -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-FRONTEND_LB=$(kubectl get svc frontend -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+# Check ingress
+kubectl get ingress -n chatbot
 
-echo "Gateway LoadBalancer: $GATEWAY_LB"
-echo "Frontend LoadBalancer: $FRONTEND_LB"
+# Get ALB endpoint
+ALB_HOST=$(kubectl get ingress chatapp -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+echo "ALB Hostname: $ALB_HOST"
 ```
 
 **Expected output**:
@@ -1496,8 +1497,8 @@ messages-xxxxx-xxxxx    1/1     Running   0          2m
 ai-worker-xxxxx-xxxxx   1/1     Running   0          2m
 
 NAME            TYPE           CLUSTER-IP       EXTERNAL-IP
-gateway         LoadBalancer   10.100.xx.xx     aaxxxx-111111111.us-east-1.elb.amazonaws.com
-frontend        LoadBalancer   10.100.xx.xx     bbyyyy-222222222.us-east-1.elb.amazonaws.com
+gateway         ClusterIP      10.100.xx.xx     <none>
+frontend        ClusterIP      10.100.xx.xx     <none>
 settings        ClusterIP      10.100.xx.xx     <none>
 conversations   ClusterIP      10.100.xx.xx     <none>
 messages        ClusterIP      10.100.xx.xx     <none>
@@ -1506,7 +1507,7 @@ messages        ClusterIP      10.100.xx.xx     <none>
 ✅ **Success Criteria**:
 - All 6 services deployed with correct replicas
 - All pods in Running state
-- LoadBalancers have external IPs assigned
+- ALB ingress hostname assigned and serving external traffic
 - No failed or pending pods
 
 ---
@@ -2133,9 +2134,9 @@ Write-Host \"\u2713 AI Worker auto-scaling configured\"\nWrite-Host \"  - Scales
 
 **PowerShell**:
 ```powershell
-$GATEWAY_URL = kubectl get svc gateway -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+$GATEWAY_URL = kubectl get ingress chatapp -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 
-# Wait for LoadBalancer to be ready
+# Wait for ALB ingress hostname to be ready
 for ($i = 0; $i -lt 30; $i++) {
     try {
         $response = Invoke-WebRequest -Uri "http://$GATEWAY_URL/health" -ErrorAction Stop
@@ -2153,7 +2154,7 @@ Invoke-RestMethod -Uri "http://$GATEWAY_URL/api/settings" -Headers @{"Content-Ty
 
 **Bash**:
 ```bash
-GATEWAY_URL=$(kubectl get svc gateway -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+GATEWAY_URL=$(kubectl get ingress chatapp -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
 # Wait for health check
 for i in {1..30}; do
@@ -2177,7 +2178,7 @@ curl -X GET "http://${GATEWAY_URL}/api/settings" \
 
 **PowerShell**:
 ```powershell
-$GATEWAY_URL = kubectl get svc gateway -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+$GATEWAY_URL = kubectl get ingress chatapp -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 
 # Create conversation
 $conv_response = Invoke-RestMethod -Uri "http://$GATEWAY_URL/api/conversations" `
@@ -2214,7 +2215,7 @@ $conv_check.messages | ForEach-Object { Write-Host "- $_.role: $_.content" }
 
 **Bash**:
 ```bash
-GATEWAY_URL=$(kubectl get svc gateway -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+GATEWAY_URL=$(kubectl get ingress chatapp -n chatbot -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
 # Create conversation
 CONV_RESPONSE=$(curl -s -X POST "http://${GATEWAY_URL}/api/conversations" \
@@ -2305,12 +2306,12 @@ kubectl logs -n chatbot deployment/ai-worker --tail=100 | grep ERROR
 ✅ AI Processing: AI worker processes jobs and stores responses
 ✅ Service Communication: All pods can reach each other
 ✅ AWS Integration: Pods can access DynamoDB, SQS, Secrets Manager
-✅ External Access: LoadBalancers have public DNS hostnames
+✅ External Access: ALB ingress hostname assigned and routing traffic
 ✅ Monitoring Ready: Pod logs visible and metrics flowing
 ```
 
 **Issues found & fixed** (Critical fixes that enabled production):
-1. Service type patched from ClusterIP → LoadBalancer
+1. Verified ALB ingress configuration for external access
 2. IAM permissions attached to IRSA role
 3. SQS queue URLs added to Kubernetes secret
 4. Pod restart to inject IRSA environment variables
@@ -2326,15 +2327,16 @@ All production testing tests are **PASSING**. The following critical issues were
 
 ### Issues Fixed During Phase 7 Testing
 
-**Issue 1: Service Type was ClusterIP (Internal Only)**
-- **Symptom**: LoadBalancer services showed `<pending>` for EXTERNAL-IP
-- **Root Cause**: Services deployed with internal ClusterIP type instead of LoadBalancer
+**Issue 1: ALB ingress not ready or ingress resource misconfigured**
+- **Symptom**: Ingress host is still `<pending>` or the ALB ingress does not appear under `kubectl get ingress -n chatbot`
+- **Root Cause**: ALB controller or ingress annotations were missing, or the ingress resource failed to reconcile
 - **Fix Applied**:
   ```bash
-  kubectl patch svc gateway -n chatbot -p '{"spec": {"type": "LoadBalancer"}}'
-  kubectl patch svc frontend -n chatbot -p '{"spec": {"type": "LoadBalancer"}}'
+  kubectl get deployment -n kube-system aws-load-balancer-controller
+  kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=50
+  kubectl describe ingress chatapp -n chatbot
   ```
-- **Result**: AWS ALB automatically provisioned; external DNS endpoints now active
+- **Result**: The AWS ALB ingress resource became active and external hostname was assigned
 
 **Issue 2: IRSA IAM Role Policies Missing**
 - **Symptom**: Pods receiving `AccessDeniedException` when accessing DynamoDB/SQS
@@ -2357,7 +2359,7 @@ All production testing tests are **PASSING**. The following critical issues were
 ### Verified Outcomes
 
 ✅ All 12 pods running and healthy (0 restarts)  
-✅ 2 LoadBalancer services with public DNS endpoints active  
+✅ ALB ingress resource with public DNS hostname active  
 ✅ Gateway responding on: `http://a0f7728f50e64408bae9e634f3dac391-1485110274.us-east-1.elb.amazonaws.com:8080`  
 ✅ Frontend responding on: `http://a52206e77a5a345b0aaade82f606d5aa-1412120485.us-east-1.elb.amazonaws.com:3000`  
 ✅ IRSA credentials properly injected in all pods  
@@ -2881,7 +2883,7 @@ If a GitHub Actions run shows failing tests or missing artifacts, follow these s
 3. Download uploaded artifacts from the **Artifacts** section (e.g., `python-unit-reports-<service>`, `frontend-test-report`). The JUnit XML files contain test names and failure messages.
 4. Reproduce locally using the exact commands listed in `infra/TESTING_OVERVIEW.md` to get the same environment and logs.
   - For Python: `pytest path/to/tests --junitxml=reports/<name>.xml`
-  - For frontend: `node --test --reporter=json tests/*.test.js > reports/frontend-tests.json` then convert with `microservices/frontend/tools/json-to-junit.js`.
+  - For frontend: `cd microservices/frontend && npm run test:reports` to write JUnit XML directly to `reports/frontend-tests.xml`.
 5. Common quick fixes:
   - JSDOM ECONNREFUSED: inline `public/assets/app.js` or stub `window.fetch` in `beforeParse` to avoid network calls.
   - boto3/DynamoDB errors: ensure tests use the in-memory `FakeTable` or run LocalStack/Moto for integration tests.
@@ -2928,9 +2930,9 @@ kubectl get secrets -n chatbot
 kubectl describe secret llm-chatbot-secret -n chatbot
 ```
 
-### Problem: LoadBalancer stuck in pending
+### Problem: ALB ingress address stuck in pending
 
-**Symptoms**: `External-IP` shows `<pending>`
+**Symptoms**: `kubectl get ingress -n chatbot` shows no external hostname or the ALB host remains `<pending>`
 
 **Solution**:
 ```bash
@@ -2940,7 +2942,10 @@ kubectl get deployment -n kube-system aws-load-balancer-controller
 # Verify ALB controller logs
 kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=50
 
-# Restart ALB controller
+# Describe the ingress resource
+kubectl describe ingress chatapp -n chatbot
+
+# Restart ALB controller if needed
 kubectl rollout restart deployment/aws-load-balancer-controller -n kube-system
 ```
 
@@ -3065,7 +3070,7 @@ kubectl rollout restart deployment/ai-worker -n chatbot
 **Step 1: Delete Helm Release**
 
 ```bash
-helm uninstall llm-chatbot -n chatbot
+helm uninstall chatapp -n chatbot
 ```
 
 **Step 2: Delete Namespace**
@@ -3132,11 +3137,11 @@ aws logs delete-log-group --log-group-name /aws/eks/llm-chatbot/cluster
 
 ```bash
 # Rollback to previous Helm release
-helm rollback llm-chatbot -n chatbot
+helm rollback chatapp -n chatbot
 
 # Or delete and reinstall
-helm uninstall llm-chatbot -n chatbot
-helm install llm-chatbot ./infra/helm/chatapp -n chatbot
+helm uninstall chatapp -n chatbot
+helm install chatapp ./infra/helm/chatapp -n chatbot
 ```
 
 ### Pod Recovery
@@ -3173,14 +3178,13 @@ All phases completed:
 
 **Immediate Actions** (Week 1):
 
-- [ ] Document and save LoadBalancer URLs:
-  - Gateway: `http://a0f7728f50e64408bae9e634f3dac391-1485110274.us-east-1.elb.amazonaws.com:8080`
-  - Frontend: `http://a52206e77a5a345b0aaade82f606d5aa-1412120485.us-east-1.elb.amazonaws.com:3000`
+- [ ] Document and save ALB ingress hostname:
+  - `http://<ALB_HOSTNAME>/`
 
 - [ ] Setup custom domain DNS mapping (optional):
   ```bash
-  # Point your domain to LoadBalancer DNS
-  gateway.yourdomain.com → a0f7728f50e64408bae9e634f3dac391-1485110274.us-east-1.elb.amazonaws.com
+  # Point your domain to ALB ingress hostname
+  gateway.yourdomain.com → <ALB_HOSTNAME>
   ```
 
 - [ ] Verify all monitoring is working:
@@ -3298,14 +3302,14 @@ kubectl port-forward svc/gateway 8080:8080 -n chatbot &
 helm list -n chatbot
 
 # Show values
-helm get values llm-chatbot -n chatbot
+helm get values chatapp -n chatbot
 
 # Upgrade
-helm upgrade llm-chatbot ./infra/helm/chatapp -n chatbot
+helm upgrade chatapp ./infra/helm/chatapp -n chatbot
 
 # Rollback
-helm rollout history llm-chatbot -n chatbot
-helm rollback llm-chatbot <revision> -n chatbot
+helm rollout history chatapp -n chatbot
+helm rollback chatapp <revision> -n chatbot
 ```
 
 ### AWS
@@ -3398,8 +3402,8 @@ aws logs describe-log-groups
   [✓] All 6 microservices deployed (gateway, frontend, ai-worker, conversations, messages, settings)
   [✓] All 12 pods in Running state (2 replicas per service)
   [✓] Pod restarts = 0 (no crashes)
-  [✓] Services created (2 LoadBalancer, 4 ClusterIP)
-  [✓] LoadBalancers have external DNS hostnames
+  [✓] Services created as ClusterIP with an external ALB ingress
+  [✓] ALB ingress has an external DNS hostname
 
 ✅ PHASE 6: AWS Service Integration
   [✓] IAM role created for workloads (llm-chatbot-workload)

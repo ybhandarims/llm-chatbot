@@ -105,9 +105,9 @@ echo "Registry: $ECR_REGISTRY"
 - `ai-worker` - 1-10 replicas (HPA enabled)
 
 ### Services (in `chatbot` namespace)
-- `frontend` - LoadBalancer (public)
-- `gateway` - LoadBalancer (public API)
-- `settings`, `conversations`, `messages` - ClusterIP (internal)
+- `frontend` - ClusterIP (exposed externally via ALB ingress)
+- `gateway` - ClusterIP (exposed externally via ALB ingress)
+- `settings`, `conversations`, `messages`, `ai` - ClusterIP (internal)
 
 ## Common Commands
 
@@ -148,19 +148,19 @@ aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_R
 
 ```bash
 # Deploy/update
-helm upgrade --install llm-chatbot ./infra/helm/chatapp -n chatbot
+helm upgrade --install chatapp ./infra/helm/chatapp -n chatbot
 
 # Check status
-helm status llm-chatbot -n chatbot
+helm status chatapp -n chatbot
 
 # Get values
-helm get values llm-chatbot -n chatbot
+helm get values chatapp -n chatbot
 
 # Rollback
-helm rollback llm-chatbot -n chatbot
+helm rollback chatapp -n chatbot
 
 # Uninstall
-helm uninstall llm-chatbot -n chatbot
+helm uninstall chatapp -n chatbot
 ```
 
 ### Kubernetes Operations
@@ -221,11 +221,12 @@ aws sqs get-queue-attributes --queue-url <url> --attribute-names All
 - **api-pool**: 2-5 t3.medium nodes (CRUD services)
 - **ai-worker-pool**: 1-5 t3.medium nodes (AI background jobs)
 
-### Load Balancers
+### Ingress and External Access
 
-- **Frontend ALB**: Exposes frontend service to internet
-- **Gateway ALB**: Exposes API gateway to internet
-- **Internal Services**: Using ClusterIP (no external access)
+- **ALB ingress**: A single AWS Application Load Balancer exposes both frontend and gateway paths
+- **Frontend path**: `/` is routed to the `frontend` service
+- **Gateway path**: `/api` is routed to the `gateway` service
+- **Internal Services**: `settings`, `conversations`, `messages`, `ai` are ClusterIP and not exposed directly
 
 ### Network Policies
 
@@ -286,7 +287,7 @@ kubectl get pods -n chatbot -w
 # HPA Status
 kubectl get hpa -n chatbot -w
 
-# Service LoadBalancers
+# Ingress and Service Access
 kubectl get svc -n chatbot
 
 # Node Status
@@ -302,14 +303,14 @@ kubectl get events -n chatbot
 - DynamoDB: Consumed read/write units, throttling
 - SQS: Messages in queue, age of oldest message
 - ECS: CPU utilization, memory utilization
-- Load Balancer: Target health, response time
+- ALB ingress: Target health, response time
 
 ## Troubleshooting Checklist
 
 | Issue | Check | Solution |
 |-------|-------|----------|
 | Pods won't start | `kubectl describe pod <name>` | Check image, resources, permissions |
-| Can't reach API | `kubectl get svc` | Check LoadBalancer IP, wait for provisioning |
+| Can't reach API | `kubectl get ingress -n chatbot` | Check ALB ingress hostname and controller status |
 | DynamoDB errors | `kubectl logs deployment/gateway` | Verify IAM role, table exists |
 | SQS not working | Check AI worker logs | Verify queue URL, permissions |
 | High latency | `kubectl top pods` | Check CPU/memory, scale pods |
@@ -354,12 +355,11 @@ Run tests locally (Python service example):
 pytest microservices/conversations-service/tests/test_api.py --junitxml=reports/conversations-integration.xml
 ```
 
-Frontend (Node) tests to JSON then convert to JUnit:
+Frontend (Node) tests with JUnit output:
 
 ```bash
 cd microservices/frontend
-node --test --reporter=json tests/*.test.js > reports/frontend-tests.json
-node tools/json-to-junit.js reports/frontend-tests.json reports/frontend-tests.xml
+npm run test:reports
 ```
 
 CI workflows of interest:
@@ -383,7 +383,7 @@ Open the artifact download from the Actions run, extract it, and open `index.htm
 
 ```bash
 # 1. Delete Helm release
-helm uninstall llm-chatbot -n chatbot
+helm uninstall chatapp -n chatbot
 
 # 2. Delete Kubernetes namespace
 kubectl delete namespace chatbot

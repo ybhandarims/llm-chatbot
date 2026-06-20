@@ -109,6 +109,7 @@ AWS_REGION=us-east-1
 |---------|------|------|-------|
 | Frontend | 3000 | Nginx | Static + API proxy |
 | Gateway | 8080 | FastAPI | Orchestration + SQS |
+| Auth | 8005 | FastAPI | Username/password + RBAC |
 | Settings | 8001 | FastAPI | User settings |
 | Conversations | 8002 | FastAPI | Chat history |
 | Messages | 8003 | FastAPI | Individual messages |
@@ -146,6 +147,16 @@ GET /api/conversations/{id}/messages
 GET /api/settings
 POST /api/settings
 POST /api/settings/reset
+```
+
+### Authentication
+```
+POST /api/auth/login
+POST /api/auth/authorize
+POST /api/users
+GET /api/users/{username}
+GET /api/roles/{role}
+POST /api/roles/{role}/permissions
 ```
 
 ### Health & Debug

@@ -24,10 +24,10 @@ Short, non-technical explanations of tools and services used in this project. Ea
 	- Why: We declare a `Deployment` per microservice so Kubernetes can restart crashed pods and roll out new images safely.
 	- Example: `kubectl rollout status deployment/gateway -n chatbot`.
 
-- Service (LoadBalancer / ClusterIP)
-	- What: A stable network endpoint that routes traffic to pods. `LoadBalancer` exposes services externally; `ClusterIP` is internal-only.
-	- Why: The frontend and gateway use `LoadBalancer` so they can receive external traffic; backend services use `ClusterIP` to stay internal.
-	- Example: `kubectl get svc frontend -n chatbot` shows an external IP when LoadBalancer is ready.
+- Service (ClusterIP + Ingress)
+	- What: A stable network endpoint that routes traffic to pods. `ClusterIP` is internal-only, and external access is provided by an ingress resource.
+	- Why: The frontend and gateway are exposed externally through ALB ingress, while backend services stay internal on ClusterIP.
+	- Example: `kubectl get ingress chatapp -n chatbot` shows the ALB hostname used for external access.
 
 - HPA (Horizontal Pod Autoscaler)
 	- What: Automatically scales the number of pod replicas based on CPU, memory, or custom metrics.
@@ -138,14 +138,14 @@ Short, non-technical explanations of tools and services used in this project. Ea
 - Node test runner & JSDOM
 	- What: `node --test` runs JavaScript tests in Node; `JSDOM` provides a DOM-like API so browser code can be tested without a real browser.
 	- Why: Fast, reproducible frontend tests in CI that validate DOM updates and client-side logic.
-	- Example: run `node --test --reporter=json tests/*.test.js` and convert the JSON to JUnit for CI.
+	- Example: run `npm run test:reports` to generate JUnit XML directly in `reports/frontend-tests.xml` for CI.
 
 ## Dev Tools & Misc
 
 - Helm
 	- What: A package manager for Kubernetes that packages resources as a chart and manages installs/upgrades.
 	- Why: Helm makes deployments repeatable and configurable across environments.
-	- Example: `helm upgrade --install llm-chatbot ./infra/helm/chatapp -n chatbot`.
+	- Example: `helm upgrade --install chatapp ./infra/helm/chatapp -n chatbot`.
 
 - kubectl
 	- What: Kubernetes command-line tool to interact with the cluster (get resources, view logs, exec).

@@ -211,13 +211,13 @@ kubectl get svc -n chatbot
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Create Helm chart
-helm create chatbot
+helm create chatapp
 
 # Deploy
-helm install chatbot ./chatbot -n chatbot --create-namespace
+helm install chatapp ./chatapp -n chatbot --create-namespace
 
 # Upgrade
-helm upgrade chatbot ./chatbot -n chatbot
+helm upgrade chatapp ./chatapp -n chatbot
 ```
 
 ## AWS Configuration

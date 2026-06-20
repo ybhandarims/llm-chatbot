@@ -149,7 +149,7 @@ Complete 8-phase step-by-step guide (15,000+ words):
 - Namespace creation
 - Helm chart deployment
 - Service verification
-- LoadBalancer endpoint retrieval
+- ALB ingress hostname retrieval
 
 #### Phase 6: AWS Service Integration (10 min)
 - IAM role configuration for workloads
@@ -368,7 +368,7 @@ We added CI and test artifacts to validate microservices and frontend automatica
   - Minimal `test_health.py` for each Python microservice (fast smoke tests)
   - `conversations-service/tests/test_api.py` — in-process API tests using an in-memory `FakeTable` (no AWS access)
   - Frontend JSDOM tests: `app.test.js`, `form.test.js`, `smoke.test.js`
-  - `microservices/frontend/tools/json-to-junit.js` converts Node JSON test output to JUnit XML for CI
+  - `npm run test:reports` is the preferred frontend CI command and writes JUnit XML directly to `reports/frontend-tests.xml`; `microservices/frontend/tools/json-to-junit.js` remains available as a legacy converter.
 - Artifacts:
   - JUnit XML reports uploaded as workflow artifacts (Python & frontend)
   - Coverage XML and HTML reports uploaded for Python unit and integration jobs

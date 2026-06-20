@@ -134,29 +134,32 @@ The microservices architecture is intentionally feature-oriented:
 
 ```mermaid
 flowchart TB
-	U[Browser / User] --> FE[Frontend App<br/>Port 3000<br/>Nginx Static]
+	U[Browser / User] --> FE[Frontend App<br/>Service: frontend<br/>URL: http://<ALB_HOSTNAME>/<br/>Port: 3000<br/>Path: /]
 	FE --> ALB["AWS ALB<br/>(Load Balancer)"]
-	ALB --> GW["API Gateway<br/>Port 8080<br/>Request Orchestration"]
+	ALB --> GW["API Gateway<br/>Service: gateway<br/>URL: http://<ALB_HOSTNAME>/api<br/>Port: 8080<br/>Paths: /api/chat/send<br/>&nbsp;/api/conversations<br/>&nbsp;/api/settings"]
 
 	subgraph Services["Core Microservices (EKS Pods)"]
 		direction LR
-		SET["Settings Service<br/>(Port 8001)"]
-		CON["Conversations Service<br/>(Port 8002)"]
-		MSG["Messages Service<br/>(Port 8003)"]
+		SET["Settings Service<br/>Service: settings<br/>URL: http://settings:8001<br/>Port: 8001<br/>Path: /settings"]
+		CON["Conversations Service<br/>Service: conversations<br/>URL: http://conversations:8002<br/>Port: 8002<br/>Path: /conversations"]
+		MSG["Messages Service<br/>Service: messages<br/>URL: http://messages:8003<br/>Port: 8003<br/>Path: /messages"]
+		AUTH["Auth Service<br/>Service: auth<br/>URL: http://auth:8005<br/>Port: 8005<br/>Paths: /api/login<br/>&nbsp;/api/authorize"]
 		
 		SET --> DDB1[("DynamoDB<br/>settings")]
 		CON --> DDB2[("DynamoDB<br/>conversations")]
 		MSG --> DDB3[("DynamoDB<br/>messages")]
 	end
 
+	GW --> AUTH
 	GW --> SET
 	GW --> CON
 	GW --> MSG
+	AUTH --> REDIS["Redis Cache<br/>RBAC Store<br/>Port: 6379"]
 	
 	subgraph Async["Async Processing Layer"]
 		direction TB
 		GW --> SQS["SQS Queue<br/>(ai-jobs.fifo)<br/>FIFO Ordering"]
-		SQS --> WORKER["AI Worker Pod(s)<br/>(Auto-scaling 0-10)"]
+		SQS --> WORKER["AI Worker Pod(s)<br/>Service: ai<br/>Port: 8004<br/>Consumes jobs from SQS"]
 		WORKER --> OPENAI["OpenAI API<br/>/ Bedrock"]
 		WORKER --> DDB3
 		SQS -.-> DLQ["DLQ<br/>(ai-jobs-dlq)"]
@@ -177,7 +180,7 @@ flowchart TB
 	class ALB lb
 	class GW gateway
 	class SET,CON,MSG service
-	class DDB1,DDB2,DDB3 db
+	class DDB1,DDB2,DDB3,REDIS db
 	class SQS,DLQ queue
 	class WORKER worker
 	class OPENAI api
@@ -327,7 +330,7 @@ sequenceDiagram
 
 ## CI / CD & Tests (What changed)
 
-We added an automated CI/CD pipeline using GitHub Actions at `.github/workflows/ci-cd.yml`.
+We added an automated CI/CD pipeline using GitHub Actions at `.github/workflows/ci.yml`.
 
 What it does (simple):
 
@@ -374,7 +377,7 @@ docker tag myaccount/llm-chatbot/gateway:local $ECR_REGISTRY/llm-chatbot/gateway
 docker push $ECR_REGISTRY/llm-chatbot/gateway:local
 
 # Deploy helm chart overriding the image
-helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace \
+helm upgrade --install chatapp infra/helm/chatapp -n chatbot --create-namespace \
 	--set images.gateway.repository=$ECR_REGISTRY/llm-chatbot/gateway --set images.gateway.tag=local
 ```
 
@@ -643,6 +646,11 @@ microservices/
 │
 ├── messages-service/                  # Messages service (port 8003)
 │   ├── main.py                        # Message persistence
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── auth-service/                      # Authentication + RBAC using Redis (port 8005)
+│   ├── main.py                        # Auth service implementation
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -921,7 +929,7 @@ eksctl create cluster -f cluster.yaml
 
 # Deploy with Helm
 cd ../helm
-helm install chatbot chatapp/ -n chatbot --create-namespace
+helm install chatapp chatapp/ -n chatbot --create-namespace
 
 # Check deployment
 kubectl get pods -n chatbot

@@ -65,10 +65,10 @@ aws sqs create-queue --queue-name ai-jobs.fifo ...
 eksctl create cluster -f eksctl/cluster.yaml
 
 # Deploy services
-helm upgrade --install llm-chatbot ./helm/chatapp -n chatbot
+helm upgrade --install chatapp ./helm/chatapp -n chatbot
 ```
 
-✅ **Done!** Access your services via LoadBalancer IPs
+✅ **Done!** Access your services via the AWS ALB ingress hostname and configured path rules.
 
 ---
 
@@ -268,7 +268,7 @@ Total Infrastructure: $450   (with spot: $250)
 |---------|----------|
 | Pods stuck in `ImagePullBackOff` | Verify ECR images exist, check IAM permissions |
 | Pods can't access DynamoDB | Verify IRSA role attached, check table permissions |
-| LoadBalancer pending | Check ALB controller: `kubectl get deployment -n kube-system` |
+| ALB ingress pending | Check ALB controller and ingress: `kubectl get deployment -n kube-system` and `kubectl get ingress -n chatbot` |
 | AI worker not processing | Verify SQS queue exists, check IAM SQS permissions |
 
 ### Quick Diagnostic Commands
@@ -328,10 +328,10 @@ kubectl get hpa -n chatbot -w
 
 ```bash
 # Undo last deployment
-helm rollback llm-chatbot -n chatbot
+helm rollback chatapp -n chatbot
 
 # Full deletion
-helm uninstall llm-chatbot -n chatbot
+helm uninstall chatapp -n chatbot
 ```
 
 ### Full Rollback (Delete Everything)
@@ -356,7 +356,7 @@ For detailed rollback procedures, see [INFRASTRUCTURE_RUNBOOK.md#Rollback](INFRA
 
 ## CI/CD (GitHub Actions)
 
-We've added a GitHub Actions workflow to automate tests, image builds, and deployments. The workflow is at `.github/workflows/ci-cd.yml` and follows this simple sequence:
+We've added GitHub Actions workflows to automate tests, image builds, and deployments. The main CI workflow is at `.github/workflows/ci.yml` and the deployment workflow is at `.github/workflows/deploy.yml`. These follow this sequence:
 
 - **Run tests**: a repo-wide test pass for Python services plus frontend tests. The workflow uses `microservices/scripts/full_test_pass.py` so CI runs the same backend sequence we validated locally.
 - **Build images**: Docker builds for each microservice under `microservices/`.
@@ -387,7 +387,7 @@ Required GitHub Secrets (set these in your repository Settings → Secrets):
 
 In plain English: you can either give the workflow a temporary role to assume, or you can keep using an access key and secret. The deploy job now checks that one of those setups exists before it tries to talk to AWS.
 
-Workflow environment defaults (edit `.github/workflows/ci-cd.yml` if needed):
+Workflow environment defaults (edit `.github/workflows/ci.yml` if needed):
 
 - `AWS_REGION` — default `us-east-1`
 - `EKS_CLUSTER_NAME` — default `chatapp-eks`
@@ -410,7 +410,7 @@ docker build -t $ECR_REGISTRY/llm-chatbot/gateway:local -f microservices/gateway
 docker push $ECR_REGISTRY/llm-chatbot/gateway:local
 
 # Deploy via Helm (override images or set values in infra/helm/chatapp/values.yaml)
-helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace \
+helm upgrade --install chatapp infra/helm/chatapp -n chatbot --create-namespace \
   --set images.gateway.repository=$ECR_REGISTRY/llm-chatbot/gateway --set images.gateway.tag=local
 ```
 
@@ -453,16 +453,13 @@ If you'd like, I can also add: cached dependencies, JUnit test reports, or a mat
  7) Create the OpenAI secret in Kubernetes
 
  ```bash
- kubectl -n chatapp create secret generic openai-secret --from-literal=OPENAI_API_KEY=${OPENAI_API_KEY}
- ```
-
- 8) Install the Helm chart for the application
+kubectl -n chatbot create secret generic openai-secret --from-literal=OPENAI_API_KEY=${OPENAI_API_KEY}
 
  Example using `--set` to override image repositories and to point to the OpenAI secret:
 
  ```bash
  helm upgrade --install chatapp infra/helm/chatapp \
-   --namespace chatapp --create-namespace \
+   --namespace chatbot --create-namespace \
    --set images.gateway.repository=${REPO_PREFIX}/gateway \
    --set images.gateway.tag=latest \
    --set images.frontend.repository=${REPO_PREFIX}/frontend \
@@ -477,34 +474,31 @@ If you'd like, I can also add: cached dependencies, JUnit test reports, or a mat
  9) Verify rollout & get ingress
 
  ```bash
- kubectl -n chatapp get pods
- kubectl -n chatapp get svc
- kubectl -n chatapp get ingress
- kubectl -n chatapp describe ingress
- ```
+kubectl -n chatbot get pods
+kubectl -n chatbot get svc
+kubectl -n chatbot get ingress
+kubectl -n chatbot describe ingress
+```
 
- 10) Tail logs for quick debugging
+10) Tail logs for quick debugging
 
- ```bash
- # gateway logs
- kubectl -n chatapp logs -l app=gateway -f
+```bash
+# gateway logs
+kubectl -n chatbot logs -l app=gateway -f
 
- # ai service logs
- kubectl -n chatapp logs -l app=ai -f
- ```
-
- 11) Upgrade / redeploy images
+# ai service logs
+kubectl -n chatbot logs -l app=ai -f
 
  - Build and push a new image with a new tag (e.g. `v1.0.1`), then run:
 
  ```bash
- helm upgrade --install chatapp infra/helm/chatapp -n chatapp \
+ helm upgrade --install chatapp infra/helm/chatapp -n chatbot \
    --set images.gateway.tag=v1.0.1 --set images.frontend.tag=v1.0.1
  ```
 
  Troubleshooting tips
  - If the ALB does not become healthy, check the AWS Load Balancer Controller logs and confirm the service account IAM policy is correct.
- - If pods crash with sqlite errors, verify that PVCs bound correctly: `kubectl -n chatapp get pvc`.
+ - If pods crash with sqlite errors, verify that PVCs bound correctly: `kubectl -n chatbot get pvc`.
  - Use `helm template infra/helm/chatapp --values infra/helm/chatapp/values.yaml` to render templates locally for inspection.
 
  Notes

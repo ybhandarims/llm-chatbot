@@ -78,9 +78,14 @@ cd monolithic_app/backend
 2. Create and activate a Python virtual environment (recommended):
 
 Windows (PowerShell):
+
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# create venv if missing, then activate
+if (-Not (Test-Path .\.venv\Scripts\python.exe)) {
+	python -m venv .venv
+	& ".\.venv\Scripts\python.exe" -m pip install --upgrade pip
+}
+& ".\.venv\Scripts\Activate.ps1"
 ```
 
 macOS / Linux:

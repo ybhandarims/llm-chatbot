@@ -257,8 +257,8 @@ Frontend Deployment:
 │  │  Backend services                   │
 │  └─ Handles compression, caching       │
 ├────────────────────────────────────────┤
-│  LoadBalancer (AWS ALB)                │
-│  Public IP accessible from browser     │
+│  ALB Ingress (AWS Application Load Balancer)
+│  Exposes frontend and API via hostname
 └────────────────────────────────────────┘
 
 Cost: $3-5/month for Nginx pod
@@ -681,7 +681,7 @@ We selected pragmatic testing and CI patterns to balance fast PR feedback with r
 - **Python tests**: `pytest` for unit and API tests. Integration-style API tests run in-process with FastAPI `TestClient` and an in-memory `FakeTable` so tests don't hit AWS.
 - **Frontend tests**: Node's test runner + JSDOM (`node --test`) for DOM-level checks. Tests inline `public/assets/app.js` or stub `window.fetch` to prevent network calls in CI.
 - **CI strategy**: two synced workflow pairs — `microservices-unit-tests.yml` (PRs, fast) and `integration-tests.yml` (main, slower integration suites), each mirrored under `infra/github-actions/`.
-- **Release workflow**: the top-level `.github/workflows/ci-cd.yml` workflow handles the full release path. It runs on `push`, `pull_request`, and `workflow_dispatch`, with path filters so it only starts for relevant backend, frontend, or infra changes.
+- **Release workflow**: the top-level `.github/workflows/ci.yml` workflow handles CI validation. Deployment is handled by `.github/workflows/deploy.yml`. Both workflows run on `push`, `pull_request`, and manual triggers where appropriate.
 - **Reporting**: Python tests emit JUnit XML (`--junitxml`) plus coverage XML/HTML via `pytest-cov`, and the frontend uses Node's built-in JUnit test reporter so GitHub Actions can show test summaries and artifacts without a JSON conversion step.
 
 This approach keeps PR feedback fast while preserving full integration validation on protected branches.

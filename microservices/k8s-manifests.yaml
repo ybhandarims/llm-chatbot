@@ -40,6 +40,8 @@ data:
   LOG_LEVEL: "INFO"
   OPENAI_MODEL: "gpt-3.5-turbo"
   SYSTEM_PROMPT: "You are a helpful assistant."
+  AUTH_URL: "http://auth:8005"
+  REDIS_URL: "redis://redis:6379/0"
 
 ---
 # Secret for sensitive data
@@ -340,6 +342,149 @@ spec:
   type: ClusterIP
 
 ---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: chatbot
+  labels:
+    app: redis
+    service: chatbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        service: chatbot
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - name: redis
+          containerPort: 6379
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: chatbot
+spec:
+  selector:
+    app: redis
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+  type: ClusterIP
+
+---
+# Auth Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  namespace: chatbot
+  labels:
+    app: auth
+    service: chatbot
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+        service: chatbot
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - auth
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: auth
+        image: llm-chatbot/auth-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8005
+        env:
+        - name: SERVICE_NAME
+          value: "auth"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
+        - name: ADMIN_USERNAME
+          value: "admin"
+        - name: ADMIN_PASSWORD
+          value: "admin123"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8005
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Auth Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth
+  namespace: chatbot
+spec:
+  selector:
+    app: auth
+  ports:
+  - name: http
+    port: 8005
+    targetPort: 8005
+  type: ClusterIP
+
+---
 # Gateway Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -392,6 +537,8 @@ spec:
         env:
         - name: SERVICE_NAME
           value: "gateway"
+        - name: AUTH_URL
+          value: "http://auth:8005"
         - name: SQS_QUEUE_URL
           value: "https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/ai-jobs"
         resources:

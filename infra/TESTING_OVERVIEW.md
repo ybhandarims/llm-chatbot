@@ -3,7 +3,7 @@
 This document describes the automated tests currently present in the repository, what each test checks, where the tests live, the results observed locally, and how to run them locally and in CI.
 
 ## CI workflow
- - Workflow file: [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
+ - Workflow file: [.github/workflows/ci.yml](.github/workflows/ci.yml)
  - What it runs:
    - Python tests: uses [microservices/scripts/full_test_pass.py](microservices/scripts/full_test_pass.py), which runs the six-service backend test pass from the repo root.
    - Frontend tests: runs the Node test reporter in `microservices/frontend` and writes JUnit XML for the workflow artifact.
@@ -15,7 +15,7 @@ Plain-language summary: this workflow is the main “check the code, build the a
 ## Plain-language summary (what we changed and what runs in CI)
 
 - What we added recently:
-  - a GitHub Actions workflow under `.github/workflows/ci-cd.yml` to run the repo-wide test pass, build images, push to ECR, and deploy with Helm;
+  - a GitHub Actions workflow under `.github/workflows/ci.yml` to run the repo-wide test pass, build images, push to ECR, and deploy with Helm;
   - minimal unit/health tests for each Python microservice so CI fails fast on broken imports or missing endpoints;
   - an API-level test for the `conversations-service` that exercises create/get/append/list/delete flows using an in-memory fake DynamoDB table;
   - a frontend DOM-level test (JSDOM) that simulates the browser, submits the chat form, and asserts the UI updates.
@@ -57,6 +57,7 @@ If you prefer CI to separate very-fast unit tests from slower API/integration te
 - Local commands you ran:
   - Python tests: `python microservices/scripts/full_test_pass.py` for the repo-wide pass, or `python -m pytest microservices/<service>/tests -q` for a single service
   - Frontend tests: `cd microservices/frontend && npm test` (runs Node's `node --test tests/*.test.js`)
+  - Frontend JUnit reports: `cd microservices/frontend && npm run test:reports` to generate `reports/frontend-tests.xml`
 
 - CI (GitHub Actions) runs the same commands in the workflow:
   - Python: `python microservices/scripts/full_test_pass.py`
@@ -72,16 +73,48 @@ If you prefer CI to separate very-fast unit tests from slower API/integration te
 
 1) One-command full 6-service pass — from repo root:
 
+PowerShell (Windows):
+
 ```powershell
-& "./.venv/Scripts/python.exe" microservices/scripts/full_test_pass.py
+# Create the repo venv if missing, then activate it and run
+if (-Not (Test-Path .\.venv\Scripts\Activate.ps1)) {
+  python -m venv .venv
+}
+. .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python microservices/scripts/full_test_pass.py
+```
+
+Bash (macOS / Linux):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python microservices/scripts/full_test_pass.py
 ```
 
 2) Using the repository virtual environment for a single service (recommended) — from repo root:
 
+PowerShell (Windows):
+
 ```powershell
-# Windows PowerShell (use the venv Python reported by the project)
-& "./.venv/Scripts/python.exe" -m pip install -r microservices/conversations-service/requirements.txt pytest
-& "./.venv/Scripts/python.exe" -m pytest microservices/conversations-service/tests -q
+# create venv if missing, then activate it and install requirements
+if (-Not (Test-Path .\.venv\Scripts\Activate.ps1)) {
+  python -m venv .venv
+}
+. .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r microservices/conversations-service/requirements.txt pytest
+python -m pytest microservices/conversations-service/tests -q
+```
+
+Bash (macOS / Linux):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r microservices/conversations-service/requirements.txt pytest
+python -m pytest microservices/conversations-service/tests -q
 ```
 
 3) Run tests for all Python services quickly (one-by-one):
@@ -91,6 +124,8 @@ python -m pytest --import-mode=importlib microservices/ai-service/tests/test_hea
 ```
 
 4) Frontend tests (Node):
+
+Note: the frontend test runner uses `node --test` and requires Node.js 18 or newer. If you have an older Node.js installed, upgrade Node or use `npm run test:reports` after installing dependencies.
 
 ```bash
 cd microservices/frontend
@@ -102,7 +137,7 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
 
 ## CI behavior and tips
 
-- The workflow file is [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml). When you push changes under `microservices/**`, `infra/**`, or `.github/workflows/**`, GitHub Actions will run the workflow and execute the same test commands described above.
+- The workflow file is [.github/workflows/ci.yml](.github/workflows/ci.yml). When you push changes under `microservices/**`, `infra/**`, or `.github/workflows/**`, GitHub Actions will run the workflow and execute the same test commands described above.
 - If some tests are slow or require external resources (real DynamoDB, external APIs), either:
   - Mock those dependencies (preferred), or
   - Move slow/integration tests to a separate workflow that runs on `main` only, not on every PR.
@@ -121,7 +156,7 @@ Notes: Frontend tests use `jsdom` and inline `public/assets/app.js` during testi
 - DynamoDB/boto3 errors in tests: mock the `table` object or use localstack/moto. The conversations-service API test uses an in-memory `FakeTable` to avoid real AWS calls.
 
 ## Where to look / files changed by recent work
-- CI workflow: [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
+- CI workflow: [.github/workflows/ci.yml](.github/workflows/ci.yml)
 - Test-only workflows: [.github/workflows/microservices-unit-tests.yml](.github/workflows/microservices-unit-tests.yml) and [.github/workflows/integration-tests.yml](.github/workflows/integration-tests.yml)
 - Conversations API tests: [microservices/conversations-service/tests/test_api.py](microservices/conversations-service/tests/test_api.py)
 - Python health tests: see each service under `microservices/*/tests/test_health.py` (AI/gateway/conversations/messages/settings)
@@ -194,10 +229,14 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
   - If the failure is in the frontend tests, download `frontend-tests.xml` (from the artifact `frontend-test-report`) — it contains the direct JUnit results from Node's built-in reporter.
 
 - Quick local commands that mirror CI (copy/paste):
-  - Full 6-service pass:
+  - Full 6-service pass (Windows PowerShell example):
 
 ```powershell
-& "./.venv/Scripts/python.exe" microservices/scripts/full_test_pass.py
+# create venv if missing, then activate and run full pass
+if (-Not (Test-Path .\.venv\Scripts\Activate.ps1)) { python -m venv .venv }
+. .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python microservices/scripts/full_test_pass.py
 ```
 
   - Python unit test (writes JUnit XML):
@@ -216,7 +255,7 @@ pytest microservices/conversations-service/tests/test_api.py --junitxml=reports/
 
 ```bash
 cd microservices/frontend
-node --test --test-reporter=junit --test-reporter-destination=reports/frontend-tests.xml tests/*.test.js
+npm run test:reports
 ```
 
 - Naming conventions used by our workflows (so you can quickly locate the right artifact):
