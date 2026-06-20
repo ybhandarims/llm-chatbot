@@ -960,7 +960,7 @@ aws ecr describe-images --repository-name llm-chatbot/gateway --region $Env:AWS_
 **Bash**:
 ```bash
 # Option 1: Simple verification (shows all image details)
-for repo in frontend gateway settings conversations messages ai-worker; do
+for repo in frontend gateway settings conversations messages ai-worker auth-service; do
     echo "Images in llm-chatbot/$repo:"
     aws ecr describe-images --repository-name llm-chatbot/$repo --region ${AWS_REGION}
     echo ""
@@ -968,7 +968,7 @@ done
 
 # Option 2: Compact verification (shows only image tags)
 echo "=== Compact Image Summary ==="
-for repo in frontend gateway settings conversations messages ai-worker; do
+for repo in frontend gateway settings conversations messages ai-worker auth-service; do
     echo -n "llm-chatbot/$repo: "
     aws ecr describe-images --repository-name llm-chatbot/$repo --region ${AWS_REGION} --query 'imageDetails[*].imageTags' --output text
 done
@@ -3103,7 +3103,7 @@ aws iam delete-role-policy --role-name llm-chatbot-workload \
 aws iam delete-role --role-name llm-chatbot-workload
 
 # Delete ECR repositories
-for repo in frontend gateway settings conversations messages ai-worker; do
+for repo in frontend gateway settings conversations messages ai-worker auth-service; do
   aws ecr delete-repository --repository-name llm-chatbot/$repo --force
 done
 
@@ -3400,7 +3400,7 @@ aws logs describe-log-groups
 
 ✅ PHASE 5: Helm Deployment
   [✓] All 7 microservices deployed (gateway, frontend, ai-worker, conversations, messages, settings, auth)
-  [✓] All 12 pods in Running state (2 replicas per service)
+  [✓] All expected pods in Running state (service replica counts configured per workload)
   [✓] Pod restarts = 0 (no crashes)
   [✓] Services created as ClusterIP with an external ALB ingress
   [✓] ALB ingress has an external DNS hostname
