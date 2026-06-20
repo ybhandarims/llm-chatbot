@@ -32,7 +32,7 @@ Updated from basic 2-node setup to production-grade multi-AZ cluster:
 
 Comprehensive configuration for production deployment:
 
-- ✅ 6 services fully configured (frontend, gateway, settings, conversations, messages, ai-worker)
+- ✅ 7 services fully configured (frontend, gateway, settings, conversations, messages, ai-worker, auth-service)
 - ✅ Horizontal Pod Autoscaling (HPA) for all services
 - ✅ Pod Disruption Budget (PDB) settings
 - ✅ Resource requests and limits (properly sized)
@@ -349,7 +349,7 @@ TOTAL:                              3.5-4.5 hours (depending on setup)
 ## Next Steps
 
 1. **Update ECR Registries**: Replace `ACCOUNT_ID` in values.yaml
-2. **Build Images**: Push all 6 services to ECR
+2. **Build Images**: Push all 7 services to ECR
 3. **Create AWS Resources**: Follow Phase 2 in runbook
 4. **Create Cluster**: Follow Phase 4 (eksctl handles most)
 5. **Deploy Services**: Follow Phase 5 with Helm

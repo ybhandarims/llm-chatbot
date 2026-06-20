@@ -17,6 +17,8 @@ jobs:
         include:
           - service_name: conversations-service
             service_path: microservices/conversations-service
+          - service_name: auth-service
+            service_path: microservices/auth-service
 
     steps:
       - name: Checkout
@@ -35,7 +37,7 @@ jobs:
       - name: Run integration tests and write JUnit XML
         run: |
           mkdir -p reports
-          pytest ${{ matrix.service_path }}/tests/test_api.py -q --junitxml=reports/${{ matrix.service_name }}-integration.xml --cov=${{ matrix.service_path }} --cov-report=xml:reports/${{ matrix.service_name }}-coverage.xml --cov-report=html:reports/${{ matrix.service_name }}-htmlcov --cov-report=term-missing || true
+          pytest ${{ matrix.service_path }}/tests -q --junitxml=reports/${{ matrix.service_name }}-integration.xml --cov=${{ matrix.service_path }} --cov-report=xml:reports/${{ matrix.service_name }}-coverage.xml --cov-report=html:reports/${{ matrix.service_name }}-htmlcov --cov-report=term-missing || true
 
       - name: Upload integration test reports
         uses: actions/upload-artifact@v7

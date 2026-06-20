@@ -162,8 +162,8 @@ settings        ClusterIP      172.20.91.96     <none>                          
 ## Infrastructure Verification Checklist
 
 ### Deployments & Pods
-- ✅ 6 microservices deployed (gateway, frontend, messages, conversations, settings, ai-worker)
-- ✅ 2 replicas per service (12 pods total)
+- ✅ 7 microservices deployed (gateway, frontend, messages, conversations, settings, ai-worker, auth)
+- ✅ Expected replicas configured per service (13 pods total with auth-service using a default 1 replica)
 - ✅ All pods in Running state
 - ✅ 0 restarts (stable)
 - ✅ All pods using `chatbot-workload` service account

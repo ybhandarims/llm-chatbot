@@ -1016,7 +1016,7 @@ Before considering deployment complete, verify:
 Production Deployment Complete When:
 ====================================
 
-✓ All 6 services running (kubectl get pods -n chatbot)
+✓ All 7 services running (kubectl get pods -n chatbot)
 ✓ All pods show "Running" status
 ✓ All pods show "1/1" ready
 ✓ Gateway LoadBalancer has external IP

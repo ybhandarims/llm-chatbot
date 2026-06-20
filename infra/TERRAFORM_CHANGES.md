@@ -3,7 +3,7 @@
 This file lists the Terraform additions and CI integrations added to the repository.
 
 Managed resources (added):
-- ECR repositories (`terraform/ecr.tf`) — frontend, gateway, conversations, messages, settings, ai-worker
+- ECR repositories (`terraform/ecr.tf`) — frontend, gateway, conversations, messages, settings, ai-worker, auth-service
 - DynamoDB tables (`terraform/dynamodb.tf`) — `conversations`, `messages`, `settings`
 - SQS queues (`terraform/sqs.tf`) — `ai-jobs.fifo`, `ai-jobs-dlq.fifo`
 - IAM roles & IRSA bindings (`terraform/iam.tf`) — workload role and policies

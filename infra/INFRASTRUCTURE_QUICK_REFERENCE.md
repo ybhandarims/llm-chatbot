@@ -102,6 +102,7 @@ echo "Registry: $ECR_REGISTRY"
 | ECR Repo | `llm-chatbot/conversations` | Conversations service Docker image |
 | ECR Repo | `llm-chatbot/messages` | Messages service Docker image |
 | ECR Repo | `llm-chatbot/ai-worker` | AI Worker Docker image |
+| ECR Repo | `llm-chatbot/auth-service` | Auth service Docker image |
 
 ## Kubernetes Resources
 
@@ -116,11 +117,12 @@ echo "Registry: $ECR_REGISTRY"
 - `conversations` - 2-5 replicas (HPA enabled)
 - `messages` - 2-5 replicas (HPA enabled)
 - `ai-worker` - 1-10 replicas (HPA enabled)
+- `auth` - 1 replica (HPA enabled)
 
 ### Services (in `chatbot` namespace)
 - `frontend` - ClusterIP (exposed externally via ALB ingress)
 - `gateway` - ClusterIP (exposed externally via ALB ingress)
-- `settings`, `conversations`, `messages`, `ai` - ClusterIP (internal)
+- `settings`, `conversations`, `messages`, `auth`, `ai` - ClusterIP (internal)
 
 ## Common Commands
 

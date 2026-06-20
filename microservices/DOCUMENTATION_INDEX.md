@@ -391,7 +391,7 @@ Total Documentation:         ~50 pages
 
 Total Code:                  ~5000 lines
 ├─ Configuration files (k8s, docker)  500 lines
-├─ Service code (6 services)         2000 lines
+├─ Service code (7 services)         2000 lines
 ├─ Documentation code                2500 lines
 └─ Scripts and utilities              500 lines
 

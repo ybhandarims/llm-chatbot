@@ -17,7 +17,7 @@ This folder contains complete infrastructure-as-code for deploying the LLM Chatb
 ### What's Included
 
 ✅ **eksctl cluster configuration** - Multi-AZ EKS cluster with 3 node pools  
-✅ **Helm charts** - Complete deployment for 6 microservices  
+✅ **Helm charts** - Complete deployment for 7 microservices  
 ✅ **Production-grade configs** - HPA, PDB, Network Policies, IRSA  
 ✅ **Comprehensive runbook** - 8-phase step-by-step implementation guide  
 ✅ **AWS integration** - DynamoDB, SQS, Secrets Manager, CloudWatch  
@@ -25,7 +25,7 @@ This folder contains complete infrastructure-as-code for deploying the LLM Chatb
 ### Architecture Highlights
 
 ```
-Users → AWS ALB → EKS Cluster (3-4 nodes) → 6 Microservices
+Users → AWS ALB → EKS Cluster (3-4 nodes) → 7 Microservices
                                              ↓
                         AWS Services: DynamoDB + SQS + Secrets Manager
 ```
@@ -47,7 +47,7 @@ images:
   gateway:
     repository: "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/llm-chatbot/gateway"
     tag: "latest"
-  # ... update all 6 services
+  # ... update all 7 services
 ```
 
 ### Step 2: Create AWS Resources
