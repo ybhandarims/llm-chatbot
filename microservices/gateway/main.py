@@ -128,7 +128,9 @@ async def refresh(payload: dict):
 
 
 @app.post("/api/auth/logout")
-async def logout(payload: Optional[dict] = None, authorization: Optional[str] = Header(None)):
+async def logout(
+    payload: Optional[dict] = None, authorization: Optional[str] = Header(None)
+):
     """Proxy logout requests to the auth service"""
     headers = {}
     if authorization:

@@ -114,8 +114,23 @@ def startup_event():
     except redis.RedisError as exc:
         logger.warning("Redis connectivity issue on startup: %s", exc)
 
-    ensure_role("admin", ["auth:manage", "users:manage", "roles:manage", "chat:send", "settings:read", "settings:write", "conversations:read", "messages:read", "messages:write"])
-    ensure_role("user", ["chat:send", "conversations:read", "messages:write", "settings:read"])
+    ensure_role(
+        "admin",
+        [
+            "auth:manage",
+            "users:manage",
+            "roles:manage",
+            "chat:send",
+            "settings:read",
+            "settings:write",
+            "conversations:read",
+            "messages:read",
+            "messages:write",
+        ],
+    )
+    ensure_role(
+        "user", ["chat:send", "conversations:read", "messages:write", "settings:read"]
+    )
     ensure_default_admin()
 
 
@@ -286,7 +301,9 @@ def login(payload: LoginRequest):
 
 
 @app.post("/api/users", response_model=UserResponse)
-def create_user_endpoint(payload: UserCreateRequest, admin_username: str = Depends(require_admin)):
+def create_user_endpoint(
+    payload: UserCreateRequest, admin_username: str = Depends(require_admin)
+):
     try:
         create_user(payload.username, payload.password, payload.roles)
         user = get_user(payload.username)
@@ -335,7 +352,9 @@ def refresh_token_endpoint(payload: RefreshRequest):
     access_token, refresh_token = updated
     session = get_session(access_token)
     if not session:
-        raise HTTPException(status_code=500, detail="Failed to create refreshed session")
+        raise HTTPException(
+            status_code=500, detail="Failed to create refreshed session"
+        )
     user = get_user(session["username"])
     return LoginResponse(
         access_token=access_token,
@@ -362,7 +381,9 @@ def logout(
         invalidate_refresh_token(payload.refresh_token)
 
     if not access_token and not (payload and payload.refresh_token):
-        raise HTTPException(status_code=400, detail="Authorization or refresh_token required")
+        raise HTTPException(
+            status_code=400, detail="Authorization or refresh_token required"
+        )
 
     return {"detail": "Logged out"}
 

@@ -49,13 +49,34 @@ def test_login_refresh_logout(monkeypatch):
     fake_redis = FakeRedis()
     monkeypatch.setattr(main, "redis_client", fake_redis)
     monkeypatch.setattr(main, "hash_password", lambda password: password)
-    monkeypatch.setattr(main, "verify_password", lambda password, password_hash: password == password_hash)
-    main.ensure_role("admin", ["auth:manage", "users:manage", "roles:manage", "chat:send", "settings:read", "settings:write", "conversations:read", "messages:read", "messages:write"])
-    main.ensure_role("user", ["chat:send", "conversations:read", "messages:write", "settings:read"])
+    monkeypatch.setattr(
+        main,
+        "verify_password",
+        lambda password, password_hash: password == password_hash,
+    )
+    main.ensure_role(
+        "admin",
+        [
+            "auth:manage",
+            "users:manage",
+            "roles:manage",
+            "chat:send",
+            "settings:read",
+            "settings:write",
+            "conversations:read",
+            "messages:read",
+            "messages:write",
+        ],
+    )
+    main.ensure_role(
+        "user", ["chat:send", "conversations:read", "messages:write", "settings:read"]
+    )
     main.ensure_default_admin()
 
     with TestClient(main.app) as client:
-        response = client.post("/api/login", json={"username": "admin", "password": "admin123"})
+        response = client.post(
+            "/api/login", json={"username": "admin", "password": "admin123"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
