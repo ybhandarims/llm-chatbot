@@ -60,6 +60,8 @@ aws dynamodb create-table --table-name conversations ...
 aws sqs create-queue --queue-name ai-jobs.fifo ...
 ```
 
+> Note: The infrastructure test coverage now includes the `auth-service` as part of the backend test pass. Use `python microservices/scripts/full_test_pass.py` from the repo root to validate all Python services before deployment.
+
 ### Step 3: Deploy Cluster
 
 ```bash

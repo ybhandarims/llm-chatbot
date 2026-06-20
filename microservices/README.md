@@ -357,7 +357,7 @@ In plain English: the pipeline checks the code first, packages each service into
 How to run tests locally:
 
 ```bash
-# From repo root — run all Python service tests
+# From repo root — run all Python service tests, including auth-service
 python microservices/scripts/full_test_pass.py
 
 # Run frontend tests
@@ -365,6 +365,8 @@ cd microservices/frontend
 npm ci
 npm run test:reports
 ```
+
+The full test pass now includes the auth-service health test and auth flow test, in addition to the existing backend service tests.
 
 How to run build+deploy locally (manual equivalent of CI):
 

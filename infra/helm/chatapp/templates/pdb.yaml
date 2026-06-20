@@ -100,4 +100,21 @@ spec:
     matchLabels:
       app.kubernetes.io/component: ai-worker
       {{- include "chatapp.selectorLabels" . | nindent 6 }}
+
+---
+# PDB for Auth Service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chatapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.auth.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: auth
+      {{- include "chatapp.selectorLabels" . | nindent 6 }}
 {{- end }}

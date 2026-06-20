@@ -19,6 +19,8 @@ def run(command: list[str], cwd: Path) -> None:
 def main() -> None:
     backend_tests = [
         "microservices/ai-service/tests/test_health.py",
+        "microservices/auth-service/tests/test_health.py",
+        "microservices/auth-service/tests/test_auth_flow.py",
         "microservices/gateway/tests/test_health.py",
         "microservices/conversations-service/tests/test_health.py",
         "microservices/conversations-service/tests/test_api.py",

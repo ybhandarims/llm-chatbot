@@ -137,7 +137,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           set -euo pipefail
-          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service")
+          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "auth-service")
           for svc in "${PY_SERVICES[@]}"; do
             svc_path="microservices/$svc"
             if [ -f "$svc_path/requirements.txt" ]; then
@@ -157,6 +157,7 @@ jobs:
           mypy microservices/messages-service/main.py --ignore-missing-imports
           mypy microservices/settings-service/main.py --ignore-missing-imports
           mypy microservices/ai-service/main.py --ignore-missing-imports
+          mypy microservices/auth-service/main.py --ignore-missing-imports
 
   tests:
     runs-on: ubuntu-latest
@@ -180,7 +181,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           set -euo pipefail
-          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service")
+          PY_SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "auth-service")
           for svc in "${PY_SERVICES[@]}"; do
             svc_path="microservices/$svc"
             if [ -f "$svc_path/requirements.txt" ]; then
@@ -268,7 +269,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "frontend")
+          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "auth-service" "frontend")
           for svc in "${SERVICES[@]}"; do
             echo "Building image for $svc"
             docker build -t "llm-chatbot-$svc:${GITHUB_SHA}" "./microservices/$svc"

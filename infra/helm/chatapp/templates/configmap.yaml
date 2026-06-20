@@ -8,6 +8,7 @@ data:
   CONVERSATIONS_URL: http://conversations:8002
   MESSAGES_URL: http://messages:8003
   AI_URL: http://ai:8004
+  AUTH_URL: http://auth:8005
   OPENAI_MODEL: {{ .Values.openai.model | quote }}
   OPENAI_MOCK: {{ .Values.openai.mock | quote }}
   SYSTEM_PROMPT: {{ .Values.openai.systemPrompt | quote }}

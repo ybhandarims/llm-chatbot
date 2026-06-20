@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  namespace: {{ .Values.namespace }}
+  labels:
+{{ include "chatapp.labels" . | indent 4 }}
+    app.kubernetes.io/component: auth
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: auth
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: auth
+{{ include "chatapp.labels" . | indent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8005"
+    spec:
+      serviceAccountName: {{ .Values.irsa.serviceAccount }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - auth
+                topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        workload: auth
+      containers:
+        - name: auth
+          image: {{ .Values.images.auth.repository }}:{{ .Values.images.auth.tag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8005
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: AWS_REGION
+              value: "{{ .Values.aws.region }}"
+            - name: REDIS_URL
+              value: "{{ .Values.redis.url | default "redis://redis:6379/0" }}"
+            - name: ADMIN_USERNAME
+              value: "{{ .Values.auth.adminUsername | default "admin" }}"
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chatapp.fullname" . }}-secret
+                  key: ADMIN_PASSWORD
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: LOG_FORMAT
+              value: "json"
+          envFrom:
+            - configMapRef:
+                name: {{ include "chatapp.fullname" . }}-config
+{{- if .Values.openai.apiKey or .Values.auth.adminPassword }}
+            - secretRef:
+                name: {{ include "chatapp.fullname" . }}-secret
+{{- end }}
+          resources:
+{{ toYaml .Values.resources.auth | indent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: {{ .Values.probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30

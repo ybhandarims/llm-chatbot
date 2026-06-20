@@ -27,6 +27,8 @@ jobs:
         include:
           - service_name: ai-service
             service_path: microservices/ai-service
+          - service_name: auth-service
+            service_path: microservices/auth-service
           - service_name: gateway
             service_path: microservices/gateway
           - service_name: conversations-service

@@ -24,6 +24,9 @@ images:
   ai:
     repository: "REPO_PREFIX/ai-worker"
     tag: "latest"
+  auth:
+    repository: "REPO_PREFIX/auth-service"
+    tag: "latest"
 
 # Service configuration
 service:
@@ -94,6 +97,13 @@ resources:
     limits:
       cpu: 1000m
       memory: 1Gi
+  auth:
+    requests:
+      cpu: 150m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 # Horizontal Pod Autoscaler configuration
 autoscaling:
@@ -124,6 +134,10 @@ autoscaling:
     minReplicas: 1
     maxReplicas: 10
     targetCPUUtilizationPercentage: 75
+  auth:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 60
 
 # Pod Disruption Budget configuration
 podDisruptionBudget:
@@ -139,6 +153,8 @@ podDisruptionBudget:
   messages:
     minAvailable: 1
   ai:
+    minAvailable: 0
+  auth:
     minAvailable: 0
 
 # Workload node assignment (node selector)
@@ -170,6 +186,13 @@ aws:
   region: "us-east-1"
   dynamodbEndpoint: ""  # Leave empty for AWS, set for local DynamoDB
   sqsEndpoint: ""       # Leave empty for AWS, set for LocalStack
+
+redis:
+  url: "redis://redis:6379/0"
+
+auth:
+  adminUsername: "admin"
+  adminPassword: ""
 
 # DynamoDB configuration
 dynamodb:

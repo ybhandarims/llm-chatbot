@@ -73,10 +73,11 @@ jobs:
           export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
           echo "ECR_REGISTRY=$ECR_REGISTRY"
 
-          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "frontend")
+          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "auth-service" "frontend")
           for svc in "${SERVICES[@]}"; do
             case $svc in
               ai-service) imagename="ai-worker" ;;
+              auth-service) imagename="auth-service" ;;
               conversations-service) imagename="conversations" ;;
               messages-service) imagename="messages" ;;
               settings-service) imagename="settings" ;;
@@ -150,6 +151,7 @@ jobs:
             "--set images.conversations.repository=${ECR_REGISTRY}/llm-chatbot/conversations" "--set images.conversations.tag=${TAG}"
             "--set images.messages.repository=${ECR_REGISTRY}/llm-chatbot/messages" "--set images.messages.tag=${TAG}"
             "--set images.ai.repository=${ECR_REGISTRY}/llm-chatbot/ai-worker" "--set images.ai.tag=${TAG}"
+            "--set images.auth.repository=${ECR_REGISTRY}/llm-chatbot/auth-service" "--set images.auth.tag=${TAG}"
           )
 
           helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace "${set_args[@]}"

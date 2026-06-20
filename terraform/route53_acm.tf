@@ -1,11 +1,5 @@
 # Create or request an ACM certificate and validate via Route53 if `domain_name` and hosted zone exist
 
-variable "domain_name" {
-  description = "Root domain name to request TLS certificate for (e.g., example.com)."
-  type        = string
-  default     = ""
-}
-
 resource "aws_acm_certificate" "cert" {
   count       = length(var.domain_name) > 0 ? 1 : 0
   domain_name = var.domain_name
