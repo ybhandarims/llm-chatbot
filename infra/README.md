@@ -4,6 +4,8 @@
 
 **⚡ Quick Reference**: [INFRASTRUCTURE_QUICK_REFERENCE.md](INFRASTRUCTURE_QUICK_REFERENCE.md) - Common commands and quick lookups
 
+**🛠️ Terraform**: [../terraform/README.md](../terraform/README.md) - Terraform configurations for provisioning cloud resources (ECR repositories, state backend, providers, and example `terraform.tfvars`).
+
 **🧭 Roadmap**: [ROADMAP.md](ROADMAP.md) - Formal phased implementation plan with plain-language explanations
 
 ---

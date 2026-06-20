@@ -24,6 +24,11 @@ infra/
 └─ INFRASTRUCTURE_QUICK_REFERENCE.md (this file)
 ```
 
+## Terraform
+
+Terraform configuration and documentation live in the top-level `terraform/` directory. This repository uses Terraform to provision cloud resources (for example, ECR repositories and backend infrastructure). See [terraform/README.md](../terraform/README.md) for details, usage (`terraform init`, `terraform plan`, `terraform apply`), and examples of the files present (providers, state backend, and example `terraform.tfvars`).
+
+
 ## Environment Variables Setup
 
 ### PowerShell (Windows)
