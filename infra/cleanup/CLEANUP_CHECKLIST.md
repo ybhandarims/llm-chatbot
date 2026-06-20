@@ -93,6 +93,7 @@ As you execute each cleanup phase:
 - [ ] Deleted llm-chatbot/conversations repo
 - [ ] Deleted llm-chatbot/messages repo
 - [ ] Deleted llm-chatbot/ai-worker repo
+- [ ] Deleted llm-chatbot/auth-service repo
 - [ ] Verified: `aws ecr describe-repositories` → no chatbot repos ✓
 - [ ] Recorded time: ________
 

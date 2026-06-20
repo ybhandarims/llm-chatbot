@@ -667,7 +667,7 @@ fi
 **PowerShell**:
 ```powershell
 $Env:AWS_REGION = "us-east-1"
-$services = @("frontend", "gateway", "settings", "conversations", "messages", "ai-worker")
+$services = @("frontend", "gateway", "settings", "conversations", "messages", "ai-worker", "auth-service")
 
 Write-Host "Deleting ECR repositories..."
 
@@ -704,7 +704,7 @@ export AWS_REGION="us-east-1"
 
 echo "Deleting ECR repositories..."
 
-for service in frontend gateway settings conversations messages ai-worker; do
+for service in frontend gateway settings conversations messages ai-worker auth-service; do
     echo "  Deleting llm-chatbot/$service..."
     
     aws ecr delete-repository \

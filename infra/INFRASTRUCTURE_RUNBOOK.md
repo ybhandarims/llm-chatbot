@@ -46,7 +46,7 @@ jq --version               # jq 1.6+ (optional)
 # Source code repository
 # This runbook assumes the llm-chatbot repository is cloned
 # All phases reference files from this repository:
-# - microservices/     (Dockerfiles for 6 services)
+# - microservices/     (Dockerfiles for 7 services)
 # - infra/             (EKS cluster config, Helm charts)
 # - docker-compose.yml (reference for local development)
 ```
@@ -141,7 +141,7 @@ EKS Cluster (Multi-AZ)
 │  ├─ system-pool (1-3 nodes, t3.medium)
 │  ├─ api-pool (2-5 nodes, t3.medium)
 │  └─ ai-worker-pool (1-5 nodes, t3.medium)
-└─ Services (6 microservices):
+└─ Services (7 microservices):
    ├─ Frontend (Nginx)
    ├─ Gateway (API Orchestration)
    ├─ Settings Service
@@ -219,7 +219,7 @@ llm-chatbot/
 ### ⚠️ **CRITICAL: This Phase Must Be Completed First**
 
 All subsequent phases reference files from this repository:
-- **microservices/** = Source code and Dockerfiles for all 6 services
+- **microservices/** = Source code and Dockerfiles for all 7 services
 - **infra/eksctl/** = EKS cluster configuration (cluster.yaml)
 - **infra/helm/chatapp/** = Helm charts for Kubernetes deployment
 - **infra/scripts/** = Utility scripts for deployment
@@ -378,7 +378,7 @@ pwd
 
 ✅ **Success Criteria**:
 - Repository cloned successfully
-- All 6 microservices present in `microservices/`
+- All 7 microservices present in `microservices/`
 - Helm charts present in `infra/helm/chatapp/`
 - EKS cluster config present in `infra/eksctl/cluster.yaml`
 - Repository root path exported (REPO_ROOT variable set)
@@ -790,7 +790,7 @@ aws secretsmanager describe-secret \
 
 **What this phase does**:
 - Creates 6 private repositories in AWS ECR (Elastic Container Registry)
-- Builds Docker images for all 6 microservices
+- Builds Docker images for all 7 microservices
 - Pushes images to ECR repositories with version tags
 
 **Why it's important**:
@@ -805,7 +805,7 @@ aws secretsmanager describe-secret \
 4. Kubernetes later pulls these images when creating pods
 
 **Expected outcomes**:
-- 6 ECR repositories created (gateway, frontend, ai-worker, conversations, messages, settings)
+- 7 ECR repositories created (gateway, frontend, ai-worker, conversations, messages, settings, auth-service)
 - Docker images built and pushed with :latest tag
 - ECR images can be pulled by Kubernetes nodes
 - Image sizes reasonable (typically 100-500 MB each)
@@ -815,8 +815,8 @@ aws secretsmanager describe-secret \
 
 **PowerShell**:
 ```powershell
-# Create repositories for all 6 services
-$services = @("frontend", "gateway", "settings", "conversations", "messages", "ai-worker")
+# Create repositories for all 7 services
+$services = @("frontend", "gateway", "settings", "conversations", "messages", "ai-worker", "auth-service")
 
 foreach ($service in $services) {
     aws ecr create-repository `
@@ -835,7 +835,7 @@ aws ecr describe-repositories --region $Env:AWS_REGION
 **Bash**:
 ```bash
 # Create repositories
-for service in frontend gateway settings conversations messages ai-worker; do
+for service in frontend gateway settings conversations messages ai-worker auth-service; do
     aws ecr create-repository \
       --repository-name llm-chatbot/$service \
       --region ${AWS_REGION} \
@@ -993,7 +993,7 @@ Total images pushed: 2 per repository = 12 total images
 
 ✅ **Success Criteria**:
 - 6 ECR repositories created
-- All 6 services built and pushed with 2 tags each (latest, v1)
+- All 7 services built and pushed with 2 tags each (latest, v1)
 - Images scannable and encrypted
 
 ---
@@ -1260,7 +1260,7 @@ rm alb-policy.json
 ### 📚 Phase Theory
 
 **What this phase does**:
-- Uses Helm (Kubernetes package manager) to deploy all 6 microservices
+- Uses Helm (Kubernetes package manager) to deploy all 7 microservices
 - Creates 2 replicas per service (12 pods total) for high availability
 - Configures ClusterIP services for internal communication and an AWS ALB ingress for external access
 - Sets up resource limits, probes, and security settings
@@ -1279,7 +1279,7 @@ Helm Install (processes templates with values)
     ↓
 Kubernetes manifests created
     ↓
-6 services deployed as ClusterIP
+7 services deployed as ClusterIP
     ↓
 One AWS ALB ingress resource created for external access
     ↓
@@ -1287,7 +1287,7 @@ External hostname assigned to ingress
 ```
 
 **Expected outcomes**:
-- All 6 services deployed (`kubectl get services -n chatbot`)
+- All 7 services deployed (`kubectl get services -n chatbot`)
 - 12 pods total in Running state with 0 restarts
 - One ingress resource with external DNS hostname
 - Gateway and frontend accessible externally through ALB paths
@@ -1505,7 +1505,7 @@ messages        ClusterIP      10.100.xx.xx     <none>
 ```
 
 ✅ **Success Criteria**:
-- All 6 services deployed with correct replicas
+- All 7 services deployed with correct replicas
 - All pods in Running state
 - ALB ingress hostname assigned and serving external traffic
 - No failed or pending pods
@@ -2284,7 +2284,7 @@ kubectl logs -n chatbot deployment/ai-worker --tail=100 | grep ERROR
 ### 📚 Phase 7 Theory
 
 **What this phase accomplished**:
-- Validated all 6 microservices are deployed and running
+- Validated all 7 microservices are deployed and running
 - Tested end-to-end chat flow (from user message to AI response)
 - Verified pod-to-AWS service integration (DynamoDB, SQS, OpenAI)
 - Debugged and fixed 4 critical infrastructure issues
@@ -2497,7 +2497,7 @@ kubectl describe hpa gateway -n chatbot
 
 **Success Criteria**:
 - ✅ HPA shows target CPU utilization
-- ✅ All 6 services have HPAs configured
+- ✅ All 7 services have HPAs configured
 - ✅ Replicas scale automatically based on load
 
 ### Step 8.3: Setup CloudWatch Alarms (Monitoring)
@@ -3169,7 +3169,7 @@ All phases completed:
 - ✅ Phase 2: AWS Configuration (DynamoDB, SQS, Secrets Manager)
 - ✅ Phase 3: Container Registry (ECR setup & image push)
 - ✅ Phase 4: EKS Cluster (4+ node cluster ready)
-- ✅ Phase 5: Helm Deployment (6 services, 12 pods)
+- ✅ Phase 5: Helm Deployment (7 services, 12 pods)
 - ✅ Phase 6: AWS Service Integration (IRSA, permissions)
 - ✅ Phase 7: Production Testing (end-to-end verified)
 - ✅ Phase 8: Monitoring & Observability (logs, alarms, HPA)
@@ -3384,7 +3384,7 @@ aws logs describe-log-groups
   [✓] Secret contains all required configurations
 
 ✅ PHASE 3: Container Registry
-  [✓] ECR repositories created (6 services)
+  [✓] ECR repositories created (7 services)
   [✓] Docker images built for all services
   [✓] Images pushed to ECR
   [✓] Images tagged correctly (:latest, :v1)
@@ -3399,7 +3399,7 @@ aws logs describe-log-groups
   [✓] Security groups properly configured
 
 ✅ PHASE 5: Helm Deployment
-  [✓] All 6 microservices deployed (gateway, frontend, ai-worker, conversations, messages, settings)
+  [✓] All 7 microservices deployed (gateway, frontend, ai-worker, conversations, messages, settings, auth)
   [✓] All 12 pods in Running state (2 replicas per service)
   [✓] Pod restarts = 0 (no crashes)
   [✓] Services created as ClusterIP with an external ALB ingress

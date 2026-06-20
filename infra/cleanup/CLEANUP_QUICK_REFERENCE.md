@@ -28,7 +28,7 @@ $q2=$(aws sqs get-queue-url --queue-name ai-jobs-dlq.fifo --region $ENV_REGION -
 aws sqs delete-queue --queue-url $q1 --region $ENV_REGION; aws sqs delete-queue --queue-url $q2 --region $ENV_REGION
 
 # 6. Delete ECR
-foreach ($s in "frontend","gateway","settings","conversations","messages","ai-worker") { aws ecr delete-repository --repository-name llm-chatbot/$s --force --region $ENV_REGION }
+foreach ($s in "frontend","gateway","settings","conversations","messages","ai-worker","auth-service") { aws ecr delete-repository --repository-name llm-chatbot/$s --force --region $ENV_REGION }
 
 # 7. Delete IAM
 aws iam delete-role-policy --role-name llm-chatbot-workload --policy-name llm-chatbot-inline-policy; aws iam delete-role --role-name llm-chatbot-workload
@@ -158,7 +158,7 @@ aws ecr describe-images --repository-name llm-chatbot/gateway
 aws ecr delete-repository --repository-name llm-chatbot/gateway --force
 
 # Delete all llm-chatbot repos
-for repo in frontend gateway settings conversations messages ai-worker; do
+for repo in frontend gateway settings conversations messages ai-worker auth-service; do
   aws ecr delete-repository --repository-name llm-chatbot/$repo --force
 done
 ```

@@ -330,7 +330,7 @@ aws secretsmanager describe-secret \
 
 **PowerShell**:
 ```powershell
-$services = @("frontend", "gateway", "settings", "conversations", "messages", "ai-worker")
+$services = @("frontend", "gateway", "settings", "conversations", "messages", "ai-worker", "auth-service")
 
 foreach ($svc in $services) {
     Write-Host "Deleting ECR repository: llm-chatbot/$svc"
@@ -347,7 +347,7 @@ aws ecr describe-repositories --region $Env:AWS_REGION
 
 **Bash**:
 ```bash
-for service in frontend gateway settings conversations messages ai-worker; do
+for service in frontend gateway settings conversations messages ai-worker auth-service; do
     echo "Deleting ECR repository: llm-chatbot/$service"
     
     aws ecr delete-repository \
