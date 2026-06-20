@@ -86,7 +86,10 @@ def decode_redis_value(value: Any) -> str:
 def decode_redis_hash(data: Any) -> dict[str, str]:
     if not data:
         return {}
-    return {decode_redis_value(key): decode_redis_value(value) for key, value in data.items()}
+    return {
+        decode_redis_value(key): decode_redis_value(value)
+        for key, value in data.items()
+    }
 
 
 def hash_password(password: str) -> str:
@@ -380,7 +383,9 @@ def create_user_endpoint(
 
 
 @app.get("/api/users/{username}", response_model=UserResponse)
-def get_user_endpoint(username: str, admin_username: str = Depends(require_admin)) -> UserResponse:
+def get_user_endpoint(
+    username: str, admin_username: str = Depends(require_admin)
+) -> UserResponse:
     user = get_user(username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -392,7 +397,9 @@ def get_user_endpoint(username: str, admin_username: str = Depends(require_admin
 
 
 @app.get("/api/roles/{role}")
-def get_role(role: str, admin_username: str = Depends(require_admin)) -> dict[str, list[str] | str]:
+def get_role(
+    role: str, admin_username: str = Depends(require_admin)
+) -> dict[str, list[str] | str]:
     return {"role": role, "permissions": get_role_permissions(role)}
 
 
