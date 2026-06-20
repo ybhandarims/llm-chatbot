@@ -54,3 +54,20 @@ output "workload_service_account_name" {
   description = "Service account used by the workload pods."
   value       = var.workload_service_account_name
 }
+
+output "dynamodb_tables" {
+  description = "DynamoDB table names created for the application."
+  value = {
+    conversations = aws_dynamodb_table.conversations.name
+    messages      = aws_dynamodb_table.messages.name
+    settings      = aws_dynamodb_table.settings.name
+  }
+}
+
+output "sqs_queue_urls" {
+  description = "SQS queue URLs for AI jobs and DLQ."
+  value = {
+    ai_jobs     = aws_sqs_queue.ai_jobs.id
+    ai_jobs_dlq = aws_sqs_queue.ai_jobs_dlq.id
+  }
+}
