@@ -578,7 +578,7 @@ $q = aws sqs get-queue-url --queue-name ai-jobs.fifo --region $Env:AWS_REGION --
 aws sqs delete-queue --queue-url $q --region $Env:AWS_REGION
 
 # ECR
-foreach ($s in "frontend", "gateway", "settings", "conversations", "messages", "ai-worker") {
+foreach ($s in "frontend", "gateway", "settings", "conversations", "messages", "ai-worker", "auth-service") {
     aws ecr delete-repository --repository-name llm-chatbot/$s --force --region $Env:AWS_REGION
 }
 

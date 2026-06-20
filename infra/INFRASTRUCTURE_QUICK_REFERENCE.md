@@ -418,10 +418,9 @@ aws sqs delete-queue --queue-url "$MAIN_QUEUE"
 aws sqs delete-queue --queue-url "$DLQ"
 
 # 6. Delete ECR repositories
-for repo in frontend gateway settings conversations messages ai-worker; do
+for repo in frontend gateway settings conversations messages ai-worker auth-service; do
   aws ecr delete-repository --repository-name llm-chatbot/$repo --force --region us-east-1
 done
-
 # 7. Verify cleanup
 echo "DynamoDB tables:" && aws dynamodb list-tables --region us-east-1 | grep TableNames
 echo "SQS queues:" && aws sqs list-queues --region us-east-1 2>/dev/null || echo "✅ No queues found"
