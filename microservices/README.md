@@ -922,6 +922,22 @@ See the [infra/INFRASTRUCTURE_RUNBOOK.md](../infra/INFRASTRUCTURE_RUNBOOK.md) fo
 - Cost optimization strategies
 
 **Quick Kubernetes Deploy:**
+
+#### Terraform & CI
+
+This project now uses Terraform to manage several cloud resources used by the microservices. Key points:
+
+- Terraform-managed resources: ECR repos, DynamoDB tables, SQS queues, IAM roles/policies, S3 bucket (assets), Secrets Manager (secrets skeleton), CloudWatch log groups, and optional Route53/ACM and EKS scaffolding.
+- Onboarding & import: follow [infra/terraform.md](../infra/terraform.md) for step-by-step initialization and `terraform import` examples.
+- CI workflows:
+  - `terraform plan` runs automatically for PRs and pushes to `main` — see [/.github/workflows/terraform.yml](../.github/workflows/terraform.yml).
+  - `apply` is manual by default to avoid accidental destructive changes; use protected environments or manual dispatch.
+  - Secrets are synced from GitHub Secrets to AWS Secrets Manager using the manual workflow [/.github/workflows/secrets-sync.yml](../.github/workflows/secrets-sync.yml).
+
+Usage notes for microservices:
+- Image URLs in `infra/helm/chatapp/values.yaml` should reference the ECR repository URLs (outputs available from Terraform after apply).
+- Secrets (for example `OPENAI_API_KEY`) should be set in AWS Secrets Manager and referenced by Kubernetes manifests or Helm values; do not store secret values in Git.
+
 ```bash
 # Create EKS cluster
 cd infra/eksctl

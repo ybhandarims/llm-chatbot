@@ -71,3 +71,23 @@ output "sqs_queue_urls" {
     ai_jobs_dlq = aws_sqs_queue.ai_jobs_dlq.id
   }
 }
+
+output "s3_bucket" {
+  description = "S3 bucket for assets"
+  value       = aws_s3_bucket.assets.id
+}
+
+output "secrets_arns" {
+  description = "ARNs of created Secrets Manager secrets"
+  value = { for k, s in aws_secretsmanager_secret.app_secrets : k => s.arn }
+}
+
+output "log_groups" {
+  description = "CloudWatch Log Group names"
+  value = { for k, lg in aws_cloudwatch_log_group.services : k => lg.name }
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN (if created)"
+  value       = length(aws_acm_certificate.cert) > 0 ? aws_acm_certificate.cert[0].arn : ""
+}

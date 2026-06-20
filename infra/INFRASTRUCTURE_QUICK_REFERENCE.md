@@ -28,6 +28,14 @@ infra/
 
 Terraform configuration and documentation live in the top-level `terraform/` directory. This repository uses Terraform to provision cloud resources (for example, ECR repositories and backend infrastructure). See [terraform/README.md](../terraform/README.md) for details, usage (`terraform init`, `terraform plan`, `terraform apply`), and examples of the files present (providers, state backend, and example `terraform.tfvars`).
 
+Terraform-managed resources (summary): ECR, DynamoDB, SQS, IAM, S3 (assets), Secrets Manager (skeleton), CloudWatch Log Groups, Route53/ACM (optional), and optional EKS scaffolding. See [TERRAFORM_CHANGES.md](TERRAFORM_CHANGES.md) and [terraform/README.md](../terraform/README.md) for a full list and file-to-resource mappings.
+
+CI workflows:
+- Terraform plan/apply: [/.github/workflows/terraform.yml](../.github/workflows/terraform.yml) (plans run on PRs/push; apply is manual by default).
+- Secrets sync: [/.github/workflows/secrets-sync.yml](../.github/workflows/secrets-sync.yml) (manually sync GitHub secrets into AWS Secrets Manager).
+
+Onboarding note: Follow [infra/terraform.md](terraform.md) for step-by-step init/import/apply instructions and import examples.
+
 
 ## Environment Variables Setup
 

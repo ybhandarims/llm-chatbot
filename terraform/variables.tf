@@ -47,6 +47,36 @@ variable "tags" {
   default     = {}
 }
 
+variable "s3_bucket_name" {
+  description = "S3 bucket name used for assets or static files"
+  type        = string
+  default     = "llm-chatbot-assets"
+}
+
+variable "secrets" {
+  description = "List of secret names to create in Secrets Manager (values are names only)."
+  type        = list(string)
+  default     = ["openai_api_key"]
+}
+
+variable "log_groups" {
+  description = "List of service names to create CloudWatch log groups for."
+  type        = list(string)
+  default     = ["gateway","frontend","conversations","messages","ai-worker","settings"]
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch log retention in days"
+  type        = number
+  default     = 14
+}
+
+variable "domain_name" {
+  description = "Optional root domain for ACM certificate and Route53 validations (e.g. example.com)."
+  type        = string
+  default     = ""
+}
+
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets"
   type        = list(string)
