@@ -73,9 +73,7 @@ def test_create_get_append_delete_conversation(patch_table):
     assert resp.status_code == 200
     payload = resp.json()
     conv_id = payload["id"]
-    assert payload["title"] == "Test" or payload["title"].startswith(
-        "Conversation-"
-    )
+    assert payload["title"] == "Test" or payload["title"].startswith("Conversation-")
 
     resp = client.get(f"/conversations/{conv_id}")
     assert resp.status_code == 200
