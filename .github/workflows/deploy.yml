@@ -1,5 +1,4 @@
 name: deploy-chatapp
-
 on:
   workflow_run:
     workflows: ["build-and-push"]
@@ -29,7 +28,6 @@ jobs:
   deploy:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -38,10 +36,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${OPENAI_API_KEY}" ]]; then
-            echo "Missing secret: OPENAI_API_KEY"
-            exit 1
-          fi
           if [[ -z "${TF_STATE_BUCKET}" || -z "${TF_LOCK_TABLE}" ]]; then
             echo "Missing secrets: TF_STATE_BUCKET and/or TF_LOCK_TABLE"
             exit 1
@@ -53,6 +47,11 @@ jobs:
           else
             echo "Set either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
             exit 1
+          fi
+          if [[ -z "${OPENAI_API_KEY}" ]]; then
+            echo "OPENAI_API_KEY not set; deploying in mock mode"
+          else
+            echo "OPENAI_API_KEY provided; deploying with real OpenAI access"
           fi
 
       - name: Configure AWS credentials using OIDC
@@ -95,7 +94,6 @@ jobs:
           else
             echo "image_tag=${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
           fi
-
           account_id=$(aws sts get-caller-identity --query Account --output text)
           echo "account_id=${account_id}" >> "${GITHUB_OUTPUT}"
           echo "ecr_registry=${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "${GITHUB_OUTPUT}"
@@ -105,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform init             -backend-config="bucket=${TF_STATE_BUCKET}"             -backend-config="key=prod/terraform.tfstate"             -backend-config="region=${AWS_REGION}"             -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
+          terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=prod/terraform.tfstate" -backend-config="region=${AWS_REGION}" -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
 
       - name: Check whether EKS cluster exists
         id: ekscheck
@@ -137,11 +135,9 @@ jobs:
           cluster_name="$(terraform output -raw eks_cluster_name 2>/dev/null || true)"
           workload_role_arn="$(terraform output -raw workload_role_arn 2>/dev/null || true)"
           workload_service_account="$(terraform output -raw workload_service_account_name 2>/dev/null || true)"
-
           if [[ -z "${cluster_name}" ]]; then
             cluster_name="${EKS_CLUSTER_NAME}"
           fi
-
           echo "cluster_name=${cluster_name}" >> "${GITHUB_OUTPUT}"
           echo "workload_role_arn=${workload_role_arn}" >> "${GITHUB_OUTPUT}"
           echo "workload_service_account=${workload_service_account}" >> "${GITHUB_OUTPUT}"
@@ -169,7 +165,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          helm upgrade --install "${HELM_RELEASE_NAME}" "${HELM_CHART_PATH}"             --namespace "${HELM_NAMESPACE}"             --create-namespace             --wait             --atomic             --timeout 20m             -f "${HELM_CHART_PATH}/values.yaml"             --set-string images.frontend.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/frontend"             --set-string images.frontend.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.gateway.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/gateway"             --set-string images.gateway.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.settings.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/settings"             --set-string images.settings.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.conversations.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/conversations"             --set-string images.conversations.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.messages.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/messages"             --set-string images.messages.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.ai.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/ai-worker"             --set-string images.ai.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.auth.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/auth-service"             --set-string images.auth.tag="${{ steps.vars.outputs.image_tag }}"             --set-string openai.apiKey="${OPENAI_API_KEY}"             --set-string irsa.roleArn="${{ steps.tfout.outputs.workload_role_arn }}"             --set-string irsa.serviceAccount="chatbot-workload"
+          helm_args=(
+            --set-string images.frontend.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/frontend"
+            --set-string images.frontend.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string images.gateway.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/gateway"
+            --set-string images.gateway.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string images.settings.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/settings"
+            --set-string images.settings.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string images.conversations.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/conversations"
+            --set-string images.conversations.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string images.messages.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/messages"
+            --set-string images.messages.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string images.ai.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/ai-worker"
+            --set-string images.ai.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string images.auth.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/auth-service"
+            --set-string images.auth.tag="${{ steps.vars.outputs.image_tag }}"
+            --set-string irsa.roleArn="${{ steps.tfout.outputs.workload_role_arn }}"
+            --set-string irsa.serviceAccount="chatbot-workload"
+          )
+
+          if [[ -n "${OPENAI_API_KEY}" ]]; then
+            helm_args+=(--set-string openai.apiKey="${OPENAI_API_KEY}" --set-string openai.mock="false")
+          else
+            helm_args+=(--set-string openai.mock="true")
+          fi
+
+          helm upgrade --install "${HELM_RELEASE_NAME}" "${HELM_CHART_PATH}" \
+            --namespace "${HELM_NAMESPACE}" \
+            --create-namespace \
+            --wait \
+            --atomic \
+            --timeout 20m \
+            -f "${HELM_CHART_PATH}/values.yaml" \
+            "${helm_args[@]}"
 
       - name: Verify rollouts
         shell: bash
