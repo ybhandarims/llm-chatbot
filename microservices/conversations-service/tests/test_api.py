@@ -1,14 +1,18 @@
-import os
-import sys
+import importlib.util
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+SERVICE_DIR = Path(__file__).resolve().parents[1]
+SERVICE_MAIN = SERVICE_DIR / "main.py"
 
-import main as svc  # noqa: E402
+spec = importlib.util.spec_from_file_location("conversations_service_main", SERVICE_MAIN)
+if spec is None or spec.loader is None:
+    raise ImportError(f"Unable to load service module from {SERVICE_MAIN}")
+
+svc = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(svc)
 
 
 class FakeTable:
