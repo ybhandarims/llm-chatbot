@@ -1,4 +1,4 @@
-bucket         = "your-real-s3-bucket"
+bucket         = "YOUR_REAL_BUCKET"
 key            = "prod/terraform.tfstate"
 region         = "us-east-1"
-dynamodb_table = "your-real-lock-table"
+dynamodb_table = "YOUR_REAL_LOCK_TABLE"
