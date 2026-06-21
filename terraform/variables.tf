@@ -62,7 +62,7 @@ variable "secrets" {
 variable "log_groups" {
   description = "List of service names to create CloudWatch log groups for."
   type        = list(string)
-  default     = ["gateway","frontend","conversations","messages","ai-worker","settings"]
+  default     = ["gateway", "frontend", "conversations", "messages", "ai-worker", "settings"]
 }
 
 variable "log_retention_days" {
@@ -73,6 +73,12 @@ variable "log_retention_days" {
 
 variable "domain_name" {
   description = "Optional root domain for ACM certificate and Route53 validations (e.g. example.com)."
+  type        = string
+  default     = ""
+}
+
+variable "route53_zone_name" {
+  description = "Optional Route53 hosted zone"
   type        = string
   default     = ""
 }

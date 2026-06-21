@@ -1,7 +1,7 @@
 resource "aws_s3_bucket" "assets" {
   bucket = var.s3_bucket_name
 
-  acl    = "private"
+  acl = "private"
 
   versioning {
     enabled = true

@@ -79,12 +79,12 @@ output "s3_bucket" {
 
 output "secrets_arns" {
   description = "ARNs of created Secrets Manager secrets"
-  value = { for k, s in aws_secretsmanager_secret.app_secrets : k => s.arn }
+  value       = { for k, s in aws_secretsmanager_secret.app_secrets : k => s.arn }
 }
 
 output "log_groups" {
   description = "CloudWatch Log Group names"
-  value = { for k, lg in aws_cloudwatch_log_group.services : k => lg.name }
+  value       = { for k, lg in aws_cloudwatch_log_group.services : k => lg.name }
 }
 
 output "acm_certificate_arn" {
