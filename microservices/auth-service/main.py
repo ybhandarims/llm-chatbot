@@ -308,7 +308,10 @@ def refresh_access_token(refresh_token: str) -> Optional[tuple[str, str]]:
 
 
 def get_role_permissions(role: str) -> list[str]:
-    return sorted(list(redis_client.smembers(role_key(role))))
+    return sorted(
+        decode_redis_value(permission)
+        for permission in redis_client.smembers(role_key(role))
+    )
 
 
 def user_has_permission(username: str, permission: str) -> bool:
