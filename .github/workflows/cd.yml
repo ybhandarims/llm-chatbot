@@ -1,53 +1,68 @@
-name: CD — Push and Deploy
+name: cd-chatapp
 
 on:
-  push:
-    branches:
-      - main
-      - release/**
-    paths:
-      - 'microservices/**'
-      - 'infra/helm/**'
-      - '.github/workflows/**'
+  workflow_run:
+    workflows: ["build-and-push"]
+    types:
+      - completed
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: llm-chatbot
+  TF_DIR: terraform
+  HELM_RELEASE_NAME: chatapp
+  HELM_NAMESPACE: chatbot
+  HELM_CHART_PATH: infra/helm/chatapp
+  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+  TF_LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
 jobs:
-  build-and-push-images:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      AWS_REGION: us-east-1
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Validate AWS deployment configuration
+      - name: Validate inputs
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "${OPENAI_API_KEY}" ]]; then
+            echo "Missing secret: OPENAI_API_KEY"
+            exit 1
+          fi
+          if [[ -z "${TF_STATE_BUCKET}" || -z "${TF_LOCK_TABLE}" ]]; then
+            echo "Missing secrets: TF_STATE_BUCKET and/or TF_LOCK_TABLE"
+            exit 1
+          fi
           if [[ -n "${AWS_ROLE_TO_ASSUME}" ]]; then
-            echo "Using AWS_ROLE_TO_ASSUME for deployment authentication"
+            echo "Using OIDC role auth"
           elif [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
-            echo "Using static AWS credentials"
+            echo "Using static AWS keys"
           else
             echo "Set either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
             exit 1
           fi
 
-      - name: Configure AWS credentials with OIDC
+      - name: Configure AWS credentials using OIDC
         if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure AWS credentials with static keys
+      - name: Configure AWS credentials using static keys
         if: ${{ env.AWS_ROLE_TO_ASSUME == '' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -55,114 +70,140 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
-        shell: bash
-        run: |
-          aws ecr get-login-password --region us-east-1 | \
-            docker login --username AWS --password-stdin \
-            ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
-        
-      - name: Build and push images
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.6.0
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+
+      - name: Resolve image tag and AWS account id
+        id: vars
         shell: bash
         run: |
           set -euo pipefail
-          AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
-          if [ -z "$AWS_ACCOUNT_ID" ]; then
-            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            echo "image_tag=${{ github.event.workflow_run.head_sha }}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "image_tag=${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
           fi
-          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          echo "ECR_REGISTRY=$ECR_REGISTRY"
 
-          SERVICES=("gateway" "conversations-service" "settings-service" "messages-service" "ai-service" "auth-service" "frontend")
-          for svc in "${SERVICES[@]}"; do
-            case $svc in
-              ai-service) imagename="ai-worker" ;;
-              auth-service) imagename="auth-service" ;;
-              conversations-service) imagename="conversations" ;;
-              messages-service) imagename="messages" ;;
-              settings-service) imagename="settings" ;;
-              gateway) imagename="gateway" ;;
-              frontend) imagename="frontend" ;;
-            esac
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=${account_id}" >> "${GITHUB_OUTPUT}"
+          echo "ecr_registry=${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "${GITHUB_OUTPUT}"
 
-            repo_name="llm-chatbot/$imagename"
-
-            if ! aws ecr describe-repositories --repository-names "$repo_name" >/dev/null 2>&1; then
-              echo "Creating ECR repository: $repo_name"
-              aws ecr create-repository --repository-name "$repo_name" >/dev/null
-            fi
-
-            echo "Building $svc -> $ECR_REGISTRY/$repo_name:${GITHUB_SHA}"
-            docker build -t "$ECR_REGISTRY/$repo_name:${GITHUB_SHA}" "./microservices/$svc"
-            docker push "$ECR_REGISTRY/$repo_name:${GITHUB_SHA}"
-          done
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build-and-push-images
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      AWS_REGION: us-east-1
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-      EKS_CLUSTER_NAME: chatapp-eks
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Configure AWS credentials with OIDC
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Configure AWS credentials with static keys
-        if: ${{ env.AWS_ROLE_TO_ASSUME == '' }}
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Debug EKS context
+      - name: Initialize Terraform backend
+        working-directory: ${{ env.TF_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "Caller identity:"
-          aws sts get-caller-identity
-          echo "Clusters in region ${{ env.AWS_REGION }}:"
-          aws eks list-clusters --region ${{ env.AWS_REGION }} || true
-          echo "Describe target cluster:"
-          aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} || true
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
+
+      - name: Check whether EKS cluster exists
+        id: ekscheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          if aws eks describe-cluster --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Bootstrap infrastructure on first run
+        if: ${{ steps.ekscheck.outputs.exists == 'false' }}
+        working-directory: ${{ env.TF_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform validate
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+
+      - name: Read Terraform outputs
+        id: tfout
+        working-directory: ${{ env.TF_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster_name="$(terraform output -raw eks_cluster_name 2>/dev/null || true)"
+          workload_role_arn="$(terraform output -raw workload_role_arn 2>/dev/null || true)"
+          workload_service_account="$(terraform output -raw workload_service_account_name 2>/dev/null || true)"
+
+          if [[ -z "${cluster_name}" ]]; then
+            cluster_name="${EKS_CLUSTER_NAME}"
+          fi
+
+          echo "cluster_name=${cluster_name}" >> "${GITHUB_OUTPUT}"
+          echo "workload_role_arn=${workload_role_arn}" >> "${GITHUB_OUTPUT}"
+          echo "workload_service_account=${workload_service_account}" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for EKS cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws eks wait cluster-active --name "${{ steps.tfout.outputs.cluster_name }}" --region "${AWS_REGION}"
+          aws eks describe-cluster --name "${{ steps.tfout.outputs.cluster_name }}" --region "${AWS_REGION}"
 
       - name: Update kubeconfig
+        shell: bash
         run: |
-          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+          set -euo pipefail
+          aws eks update-kubeconfig --name "${{ steps.tfout.outputs.cluster_name }}" --region "${AWS_REGION}"
+
+      - name: Create namespace if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl create namespace "${HELM_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy Helm chart
         shell: bash
         run: |
           set -euo pipefail
-          AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
-          if [ -z "$AWS_ACCOUNT_ID" ]; then
-            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          fi
-          export ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          TAG=${GITHUB_SHA}
+          helm upgrade --install "${HELM_RELEASE_NAME}" "${HELM_CHART_PATH}" \
+            --namespace "${HELM_NAMESPACE}" \
+            --create-namespace \
+            --wait \
+            --atomic \
+            --timeout 20m \
+            -f "${HELM_CHART_PATH}/values.yaml" \
+            --set-string images.frontend.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/frontend" \
+            --set-string images.frontend.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string images.gateway.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/gateway" \
+            --set-string images.gateway.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string images.settings.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/settings" \
+            --set-string images.settings.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string images.conversations.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/conversations" \
+            --set-string images.conversations.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string images.messages.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/messages" \
+            --set-string images.messages.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string images.ai.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/ai-worker" \
+            --set-string images.ai.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string images.auth.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/auth-service" \
+            --set-string images.auth.tag="${{ steps.vars.outputs.image_tag }}" \
+            --set-string openai.apiKey="${OPENAI_API_KEY}" \
+            --set-string irsa.roleArn="${{ steps.tfout.outputs.workload_role_arn }}" \
+            --set-string irsa.serviceAccount="chatbot-workload"
 
-          set_args=(
-            "--set images.frontend.repository=${ECR_REGISTRY}/llm-chatbot/frontend" "--set images.frontend.tag=${TAG}"
-            "--set images.gateway.repository=${ECR_REGISTRY}/llm-chatbot/gateway" "--set images.gateway.tag=${TAG}"
-            "--set images.settings.repository=${ECR_REGISTRY}/llm-chatbot/settings" "--set images.settings.tag=${TAG}"
-            "--set images.conversations.repository=${ECR_REGISTRY}/llm-chatbot/conversations" "--set images.conversations.tag=${TAG}"
-            "--set images.messages.repository=${ECR_REGISTRY}/llm-chatbot/messages" "--set images.messages.tag=${TAG}"
-            "--set images.ai.repository=${ECR_REGISTRY}/llm-chatbot/ai-worker" "--set images.ai.tag=${TAG}"
-            "--set images.auth.repository=${ECR_REGISTRY}/llm-chatbot/auth-service" "--set images.auth.tag=${TAG}"
-          )
-
-          helm upgrade --install llm-chatbot infra/helm/chatapp -n chatapp --create-namespace "${set_args[@]}"
+      - name: Verify rollouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for deploy in frontend gateway settings conversations messages ai-worker auth; do
+            kubectl rollout status deployment/"${deploy}" -n "${HELM_NAMESPACE}" --timeout=15m
+          done
+          kubectl get pods -n "${HELM_NAMESPACE}"
+          kubectl get svc -n "${HELM_NAMESPACE}"
