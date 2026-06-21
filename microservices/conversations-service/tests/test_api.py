@@ -4,10 +4,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-SERVICE_DIR = Path(__file__).resolve().parents[1]
-SERVICE_MAIN = SERVICE_DIR / "main.py"
+TEST_DIR = Path(__file__).resolve().parent
+SERVICE_MAIN = TEST_DIR.parent / "main.py"
 
-spec = importlib.util.spec_from_file_location("conversations_service_main", SERVICE_MAIN)
+spec = importlib.util.spec_from_file_location(
+    "conversations_service_main", SERVICE_MAIN
+)
 if spec is None or spec.loader is None:
     raise ImportError(f"Unable to load service module from {SERVICE_MAIN}")
 
@@ -17,7 +19,6 @@ spec.loader.exec_module(svc)
 
 class FakeTable:
     def __init__(self):
-        # Store items keyed by (user_id, conversation_id).
         self.items = {}
 
     def put_item(self, Item):
@@ -61,7 +62,6 @@ class FakeTable:
 @pytest.fixture(autouse=True)
 def patch_table(monkeypatch):
     fake = FakeTable()
-    # Replace the service's DynamoDB table factory with our fake table.
     monkeypatch.setattr(svc, "get_table", lambda: fake)
     yield fake
 
@@ -69,21 +69,20 @@ def patch_table(monkeypatch):
 def test_create_get_append_delete_conversation(patch_table):
     client = TestClient(svc.app)
 
-    # Create conversation.
     resp = client.post("/conversations", json={"title": "Test"})
     assert resp.status_code == 200
     payload = resp.json()
     conv_id = payload["id"]
-    assert payload["title"] == "Test" or payload["title"].startswith("Conversation-")
+    assert payload["title"] == "Test" or payload["title"].startswith(
+        "Conversation-"
+    )
 
-    # Get conversation.
     resp = client.get(f"/conversations/{conv_id}")
     assert resp.status_code == 200
     got = resp.json()
     assert got["id"] == conv_id
     assert isinstance(got["messages"], list)
 
-    # Append message.
     resp = client.post(
         f"/conversations/{conv_id}/messages",
         json={"role": "user", "content": "hello"},
@@ -92,13 +91,11 @@ def test_create_get_append_delete_conversation(patch_table):
     updated = resp.json()
     assert any(message["content"] == "hello" for message in updated["messages"])
 
-    # List conversations.
     resp = client.get("/conversations")
     assert resp.status_code == 200
     conversations = resp.json()
     assert any(conversation["id"] == conv_id for conversation in conversations)
 
-    # Delete conversation.
     resp = client.delete(f"/conversations/{conv_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "deleted"
