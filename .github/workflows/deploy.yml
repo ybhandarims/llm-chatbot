@@ -13,6 +13,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: llm-chatbot
   TF_DIR: terraform
   HELM_RELEASE_NAME: chatapp
   HELM_NAMESPACE: chatbot
@@ -37,17 +38,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           if [[ -z "${OPENAI_API_KEY}" ]]; then
             echo "Missing secret: OPENAI_API_KEY"
             exit 1
           fi
-
           if [[ -z "${TF_STATE_BUCKET}" || -z "${TF_LOCK_TABLE}" ]]; then
             echo "Missing secrets: TF_STATE_BUCKET and/or TF_LOCK_TABLE"
             exit 1
           fi
-
           if [[ -n "${AWS_ROLE_TO_ASSUME}" ]]; then
             echo "Using OIDC role auth"
           elif [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
@@ -87,21 +85,20 @@ jobs:
         with:
           version: v3.15.4
 
-      - name: Resolve image tag and AWS account
+      - name: Resolve image tag and AWS account id
         id: vars
         shell: bash
         run: |
           set -euo pipefail
-
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
-            echo "image_tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${{ github.event.workflow_run.head_sha }}" >> "${GITHUB_OUTPUT}"
           else
-            echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
           fi
 
           account_id=$(aws sts get-caller-identity --query Account --output text)
-          echo "account_id=${account_id}" >> "$GITHUB_OUTPUT"
-          echo "ecr_registry=${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+          echo "account_id=${account_id}" >> "${GITHUB_OUTPUT}"
+          echo "ecr_registry=${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "${GITHUB_OUTPUT}"
 
       - name: Initialize Terraform backend
         working-directory: ${{ env.TF_DIR }}
@@ -115,10 +112,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if aws eks describe-cluster --name "chatapp-eks" --region "${AWS_REGION}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+          if aws eks describe-cluster --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Bootstrap infrastructure on first run
@@ -137,9 +134,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "cluster_name=$(terraform output -raw eks_cluster_name)" >> "$GITHUB_OUTPUT"
-          echo "workload_role_arn=$(terraform output -raw workload_role_arn)" >> "$GITHUB_OUTPUT"
-          echo "workload_service_account=$(terraform output -raw workload_service_account_name 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          cluster_name="$(terraform output -raw eks_cluster_name 2>/dev/null || true)"
+          workload_role_arn="$(terraform output -raw workload_role_arn 2>/dev/null || true)"
+          workload_service_account="$(terraform output -raw workload_service_account_name 2>/dev/null || true)"
+
+          if [[ -z "${cluster_name}" ]]; then
+            cluster_name="${EKS_CLUSTER_NAME}"
+          fi
+
+          echo "cluster_name=${cluster_name}" >> "${GITHUB_OUTPUT}"
+          echo "workload_role_arn=${workload_role_arn}" >> "${GITHUB_OUTPUT}"
+          echo "workload_service_account=${workload_service_account}" >> "${GITHUB_OUTPUT}"
 
       - name: Wait for EKS cluster
         shell: bash
@@ -164,7 +169,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           helm upgrade --install "${HELM_RELEASE_NAME}" "${HELM_CHART_PATH}"             --namespace "${HELM_NAMESPACE}"             --create-namespace             --wait             --atomic             --timeout 20m             -f "${HELM_CHART_PATH}/values.yaml"             --set-string images.frontend.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/frontend"             --set-string images.frontend.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.gateway.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/gateway"             --set-string images.gateway.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.settings.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/settings"             --set-string images.settings.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.conversations.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/conversations"             --set-string images.conversations.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.messages.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/messages"             --set-string images.messages.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.ai.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/ai-worker"             --set-string images.ai.tag="${{ steps.vars.outputs.image_tag }}"             --set-string images.auth.repository="${{ steps.vars.outputs.ecr_registry }}/llm-chatbot/auth-service"             --set-string images.auth.tag="${{ steps.vars.outputs.image_tag }}"             --set-string openai.apiKey="${OPENAI_API_KEY}"             --set-string irsa.roleArn="${{ steps.tfout.outputs.workload_role_arn }}"             --set-string irsa.serviceAccount="chatbot-workload"
 
       - name: Verify rollouts
@@ -174,6 +178,5 @@ jobs:
           for deploy in frontend gateway settings conversations messages ai-worker auth; do
             kubectl rollout status deployment/"${deploy}" -n "${HELM_NAMESPACE}" --timeout=15m
           done
-
           kubectl get pods -n "${HELM_NAMESPACE}"
           kubectl get svc -n "${HELM_NAMESPACE}"
