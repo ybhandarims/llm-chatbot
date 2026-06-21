@@ -1,5 +1,4 @@
 name: CI — Lint, Format, Type Check, Tests, Build, Image Build
-
 on:
   push:
     branches:
@@ -84,7 +83,7 @@ jobs:
           cache: 'pip'
 
       - name: Install backend format tool
-        run: python -m pip install --upgrade pip black
+        run: python -m pip install --upgrade pip black==26.5.1
 
       - name: Run backend format validation
         run: |
@@ -148,7 +147,22 @@ jobs:
 
       - name: Install mypy
         run: python -m pip install --upgrade pip mypy
+      - name: Debug type-check paths
+        run: |
+          set -euo pipefail
+          echo "Workspace:"
+          pwd
+          echo "Git commit:"
+          git rev-parse --short HEAD
 
+          echo "Microservices directory:"
+          ls -la microservices || true
+
+          echo "Auth service directory:"
+          ls -la microservices/auth-service || true
+
+          echo "All main.py files:"
+          find microservices -name main.py | sort || true
       - name: Run backend type check
         run: |
           set -euo pipefail
@@ -158,7 +172,6 @@ jobs:
           mypy microservices/settings-service/main.py --ignore-missing-imports
           mypy microservices/ai-service/main.py --ignore-missing-imports
           mypy microservices/auth-service/main.py --ignore-missing-imports
-
   tests:
     runs-on: ubuntu-latest
     name: Run unit & integration tests

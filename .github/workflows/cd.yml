@@ -129,6 +129,17 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Debug EKS context
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Caller identity:"
+          aws sts get-caller-identity
+          echo "Clusters in region ${{ env.AWS_REGION }}:"
+          aws eks list-clusters --region ${{ env.AWS_REGION }} || true
+          echo "Describe target cluster:"
+          aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} || true
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
