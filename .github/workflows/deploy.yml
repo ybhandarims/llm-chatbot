@@ -36,19 +36,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${TF_STATE_BUCKET}" || -z "${TF_LOCK_TABLE}" ]]; then
+          if [[ -z "${TF_STATE_BUCKET:-}" || -z "${TF_LOCK_TABLE:-}" ]]; then
             echo "Missing secrets: TF_STATE_BUCKET and/or TF_LOCK_TABLE"
             exit 1
           fi
-          if [[ -n "${AWS_ROLE_TO_ASSUME}" ]]; then
+          if [[ -n "${AWS_ROLE_TO_ASSUME:-}" ]]; then
             echo "Using OIDC role auth"
-          elif [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+          elif [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
             echo "Using static AWS keys"
           else
             echo "Set either AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
             exit 1
           fi
-          if [[ -z "${OPENAI_API_KEY}" ]]; then
+          if [[ -z "${OPENAI_API_KEY:-}" ]]; then
             echo "OPENAI_API_KEY not set; deploying in mock mode"
           else
             echo "OPENAI_API_KEY provided; deploying with real OpenAI access"
@@ -184,7 +184,7 @@ jobs:
             --set-string irsa.serviceAccount="chatbot-workload"
           )
 
-          if [[ -n "${OPENAI_API_KEY}" ]]; then
+          if [[ -n "${OPENAI_API_KEY:-}" ]]; then
             helm_args+=(--set-string openai.apiKey="${OPENAI_API_KEY}" --set-string openai.mock="false")
           else
             helm_args+=(--set-string openai.mock="true")
