@@ -309,7 +309,7 @@ ls -la
 ```bash
 # Check for all Dockerfiles
 find microservices -name "Dockerfile" -type f
-# Expected: 6 Dockerfiles
+# Expected: 7 Dockerfiles
 
 # Check for Helm chart
 ls -la infra/helm/chatapp/
@@ -369,7 +369,7 @@ test -f infra/eksctl/cluster.yaml && echo "✓ EKS cluster config found" || echo
 test -d infra/helm/chatapp && echo "✓ Helm chart found" || echo "✗ Helm chart NOT found"
 
 # ✓ All Dockerfiles present
-test $(find microservices -name "Dockerfile" | wc -l) -eq 6 && echo "✓ All 6 Dockerfiles found" || echo "✗ Missing Dockerfiles"
+test $(find microservices -name "Dockerfile" | wc -l) -eq 7 && echo "✓ All 7 Dockerfiles found" || echo "✗ Missing Dockerfiles"
 
 # ✓ Verify current directory
 pwd
@@ -789,7 +789,7 @@ aws secretsmanager describe-secret \
 ### 📚 Phase Theory
 
 **What this phase does**:
-- Creates 6 private repositories in AWS ECR (Elastic Container Registry)
+- Creates 7 private repositories in AWS ECR (Elastic Container Registry)
 - Builds Docker images for all 7 microservices
 - Pushes images to ECR repositories with version tags
 
@@ -851,13 +851,14 @@ aws ecr describe-repositories --region ${AWS_REGION}
 
 **Expected output**:
 ```
-6 repositories created:
+7 repositories created:
 - llm-chatbot/frontend
 - llm-chatbot/gateway
 - llm-chatbot/settings
 - llm-chatbot/conversations
 - llm-chatbot/messages
 - llm-chatbot/ai-worker
+- llm-chatbot/auth-service
 ```
 
 ### Step 3.2: Login to ECR
@@ -988,11 +989,14 @@ llm-chatbot/conversations: ['latest', 'v1']
 llm-chatbot/messages: ['latest', 'v1']
 llm-chatbot/ai-worker: ['latest', 'v1']
 
-Total images pushed: 2 per repository = 12 total images
+llm-chatbot/auth-service: ['latest', 'v1']
+
+Total images pushed: 2 per repository = 14 total images
 ```
 
+
 ✅ **Success Criteria**:
-- 6 ECR repositories created
+- 7 ECR repositories created
 - All 7 services built and pushed with 2 tags each (latest, v1)
 - Images scannable and encrypted
 
@@ -2854,7 +2858,7 @@ aws iam get-role --role-name llm-chatbot-workload
 | ✅ DynamoDB Tables (conversations, messages, settings) | DELETED | `"TableNames": []` |
 | ✅ EKS Cluster (llm-chatbot) | DELETED | Connection failed = Confirmed |
 | ✅ Kubernetes Namespace (chatbot) | DELETED | Namespace not found |
-| ✅ ECR Repositories (6 llm-chatbot repos) | DELETED | RepositoryNotFoundException |
+| ✅ ECR Repositories (7 llm-chatbot repos) | DELETED | RepositoryNotFoundException |
 | ✅ Helm Releases | DELETED | Release not found |
 
 **🎉 Complete Infrastructure Teardown**:

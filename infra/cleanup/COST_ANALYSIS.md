@@ -18,7 +18,7 @@
 | **CloudWatch** | Logs (7-day retention) | $20 | $20 | All services + EKS logs |
 | **Data Transfer** | Between AZs | $20 | $20 | Multi-AZ costs |
 | **Secrets Manager** | 1 secret | $1 | $1 | llm-chatbot/openai-key |
-| **ECR** | Storage (6 images) | $5 | $5 | Docker images |
+| **ECR** | Storage (7 images) | $5 | $5 | Docker images |
 | **Elastic IPs** | 2 ALB IPs (if NAT) | $10 | $10 | Optional |
 | **---** | --- | --- | --- | --- |
 | **TOTAL** | **Monthly Infrastructure** | **$464** | **$264** | **~$5,568-$3,168/year** |

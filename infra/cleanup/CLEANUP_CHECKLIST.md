@@ -166,7 +166,7 @@ After cleanup completes, verify everything is gone:
 | ✅ DynamoDB Tables | DELETED | `"TableNames": []` |
 | ✅ EKS Cluster | DELETED | Connection failed |
 | ✅ Kubernetes Namespace | DELETED | Namespace not found |
-| ✅ ECR Repositories (6) | DELETED | RepositoryNotFoundException |
+| ✅ ECR Repositories (7) | DELETED | RepositoryNotFoundException |
 | ✅ Helm Releases | DELETED | Release not found |
 
 ### Cost Savings Achieved

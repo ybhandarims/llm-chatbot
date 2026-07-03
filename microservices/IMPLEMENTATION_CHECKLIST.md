@@ -30,14 +30,14 @@
 
 ## PHASE 3: Docker & ECR (30 min)
 - [ ] Set AWS_ACCOUNT_ID variable
-- [ ] Create ECR repositories (6 total)
+- [ ] Create ECR repositories (7 total)
 - [ ] Stop containers: `docker-compose down`
 - [ ] Login to ECR: `aws ecr get-login-password ...`
 - [ ] Tag images: `docker tag llm-chatbot-gateway ...`
 - [ ] Push images: `docker push <registry>/llm-chatbot/gateway:latest`
 - [ ] Verify in AWS Console
 
-**Expected Result**: All 6 images in ECR with "latest" tag
+**Expected Result**: All 7 images in ECR with "latest" tag
 
 ---
 
@@ -61,7 +61,7 @@
 - [ ] Watch deployment: `kubectl get deployments -n chatbot -w`
 - [ ] Verify pods: `kubectl get pods -n chatbot` (all Running)
 
-**Expected Result**: All 6 deployments showing 3/3 ready
+**Expected Result**: All 7 deployments showing 3/3 ready
 
 ---
 
@@ -142,7 +142,7 @@ DYNAMODB_TABLE=conversations
 
 ## CRITICAL SUCCESS FACTORS
 
-✓ All services running (6 total)
+✓ All services running (7 total)
 ✓ All pods show "1/1" ready
 ✓ Gateway has LoadBalancer IP
 ✓ Frontend has LoadBalancer IP

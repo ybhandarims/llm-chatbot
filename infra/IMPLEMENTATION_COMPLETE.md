@@ -134,8 +134,8 @@ Complete 8-phase step-by-step guide (15,000+ words):
 - Secrets Manager configuration
 - IAM role creation
 
-#### Phase 3: Container Registry (20 min)
-- ECR repository creation (6 repos)
+-#### Phase 3: Container Registry (20 min)
+- ECR repository creation (7 repos)
 - Docker image building
 - Image tagging and pushing
 

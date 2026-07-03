@@ -71,7 +71,7 @@ If you prefer CI to separate very-fast unit tests from slower API/integration te
 
 ## How to run tests locally (copyable commands)
 
-1) One-command full 6-service pass — from repo root:
+1) One-command full 7-service pass — from repo root:
 
 PowerShell (Windows):
 
@@ -229,7 +229,7 @@ If you're not familiar with CI artifacts and JUnit reports, here's a simple, ste
   - If the failure is in the frontend tests, download `frontend-tests.xml` (from the artifact `frontend-test-report`) — it contains the direct JUnit results from Node's built-in reporter.
 
 - Quick local commands that mirror CI (copy/paste):
-  - Full 6-service pass (Windows PowerShell example):
+  - Full 7-service pass (Windows PowerShell example):
 
 ```powershell
 # create venv if missing, then activate and run full pass
